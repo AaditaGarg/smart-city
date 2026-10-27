@@ -1,0 +1,9 @@
+# Central config; later steps read dataset/model settings from here.
+seed: 42
+split: {train: 0.7, val: 0.15, test: 0.15}
+image_size: 640
+vehicle_classes: [car, bus, truck, motorcycle]
+road_damage_classes: [longitudinal_crack, transverse_crack, alligator_crack, pothole]
+datasets:
+  vehicle: []        # filled in Step 2
+  road_damage: []    # filled in Step 2
