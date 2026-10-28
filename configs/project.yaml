@@ -1,9 +1,47 @@
-# Central config; later steps read dataset/model settings from here.
 seed: 42
-split: {train: 0.7, val: 0.15, test: 0.15}
+split: {train: 0.70, val: 0.15, test: 0.15}
 image_size: 640
-vehicle_classes: [car, bus, truck, motorcycle]
-road_damage_classes: [longitudinal_crack, transverse_crack, alligator_crack, pothole]
-datasets:
-  vehicle: []        # filled in Step 2
-  road_damage: []    # filled in Step 2
+device_hint: auto       # auto = CUDA if present, else Apple MPS, else CPU
+
+vehicle:                # KITTI
+  raw_dir: data/raw/kitti
+  out_dir: data/processed/vehicle
+  kitti_names: [car, van, truck, pedestrian, person_sitting, cyclist, tram, misc]  # raw class order
+  classes: [car, van, truck, tram]          # kept for traffic analysis; everything else = background
+  train:
+    model: yolo11n.pt
+    epochs: 30
+    imgsz: 640
+    batch: 16
+    patience: 10
+    workers: 2
+    hyp: {fliplr: 0.5, flipud: 0.0, mosaic: 1.0, close_mosaic: 5, degrees: 0.0}
+
+road_damage:            # RDD2022 India
+  raw_dir: data/raw/rdd2022/India/train
+  out_dir: data/processed/road_damage
+  classes:
+    - {code: D00, name: longitudinal_crack}
+    - {code: D10, name: transverse_crack}
+    - {code: D20, name: alligator_crack}
+    - {code: D40, name: pothole}
+  # raw code -> kept class. Anything not listed is dropped (D43/D44/D50 are road-marking/utility-hole codes
+  # in the RDD2018 taxonomy; D0w0 looks like a typo). D01/D11 are assumed to be crack variants.
+  class_map: {D00: D00, D01: D00, D10: D10, D11: D10, D20: D20, D40: D40}
+  negatives_ratio: 0.3        # keep this many damage-free images per damage image
+  size_mismatch: drop         # drop | rescale | ignore  (XML size != real image size)
+  oversample: {classes: [transverse_crack], copies: 3}   # offline augmentation of rare classes, train split only
+  train:
+    model: yolo11n.pt
+    epochs: 40
+    imgsz: 640
+    batch: 16
+    patience: 12
+    workers: 2
+    hyp: {fliplr: 0.5, flipud: 0.0, mosaic: 1.0, close_mosaic: 5, degrees: 0.0}
+
+congestion:             # scikit-learn model on top of vehicle-detector outputs (proxy target, see congestion.py)
+  conf: 0.25
+  cv_folds: 5
+  out_dir: data/processed/congestion
+  levels: [free, moderate, heavy]

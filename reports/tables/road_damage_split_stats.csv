@@ -1,0 +1,4 @@
+split,images,aug_images,background_images,boxes_longitudinal_crack,boxes_transverse_crack,boxes_alligator_crack,boxes_pothole
+train,3218,199,696,1449,310,1432,2349
+val,647,0,150,255,19,306,464
+test,647,0,149,265,16,316,496

@@ -1,0 +1,34 @@
+{
+  "task": "vehicle",
+  "name": "vehicle_quick",
+  "pretrained": "yolo11n.pt",
+  "device": "mps",
+  "train_args": {
+    "epochs": 2,
+    "imgsz": 320,
+    "batch": 16,
+    "fraction": 0.05,
+    "patience": 10,
+    "workers": 2,
+    "seed": 42,
+    "plots": true,
+    "fliplr": 0.5,
+    "flipud": 0.0,
+    "mosaic": 1.0,
+    "close_mosaic": 1,
+    "degrees": 0.0
+  },
+  "wall_clock_seconds": 47.1,
+  "ultralytics": "8.4.183",
+  "torch": "2.14.1",
+  "python": "3.13.9",
+  "machine": "macOS-26.6-arm64-arm-64bit-Mach-O",
+  "final_val_metrics": {
+    "metrics/precision(B)": 0.8167968213728787,
+    "metrics/recall(B)": 0.10747466002665981,
+    "metrics/mAP50(B)": 0.12452107173766556,
+    "metrics/mAP50-95(B)": 0.05470627752001238,
+    "fitness": 0.05470627752001238
+  },
+  "best_weights": "/Users/aaditagarg/Downloads/smart-city/models/vehicle_quick_best.pt"
+}

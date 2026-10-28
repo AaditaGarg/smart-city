@@ -1,0 +1,29 @@
+{
+  "images_found": 7481,
+  "images_used": 7481,
+  "excluded": {},
+  "raw_box_classes": {
+    "misc": 973,
+    "car": 28742,
+    "pedestrian": 4487,
+    "cyclist": 1627,
+    "truck": 1094,
+    "tram": 511,
+    "van": 2914,
+    "person_sitting": 222
+  },
+  "dropped_classes": {
+    "misc": 973,
+    "pedestrian": 4487,
+    "cyclist": 1627,
+    "person_sitting": 222
+  },
+  "issue_counts": {
+    "degenerate_box": 3
+  },
+  "split_sizes": {
+    "train": 5236,
+    "val": 1122,
+    "test": 1123
+  }
+}

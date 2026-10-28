@@ -1,0 +1,33 @@
+{
+  "annotations_found": 7706,
+  "positives": 3318,
+  "negatives_available": 3921,
+  "negatives_used": 995,
+  "excluded": {
+    "only_dropped_or_invalid_boxes": 467
+  },
+  "raw_box_codes": {
+    "D40": 3187,
+    "D44": 1062,
+    "D00": 1555,
+    "D20": 2021,
+    "D01": 179,
+    "D11": 45,
+    "D10": 68,
+    "D50": 28,
+    "D43": 57,
+    "D0w0": 1
+  },
+  "dropped_codes": {
+    "D44": 1062,
+    "D50": 28,
+    "D43": 57,
+    "D0w0": 1
+  },
+  "issue_counts": {},
+  "split_sizes": {
+    "train": 3019,
+    "val": 647,
+    "test": 647
+  }
+}

@@ -1,0 +1,4 @@
+split,images,aug_images,background_images,boxes_car,boxes_van,boxes_truck,boxes_tram
+train,5236,0,463,19981,2025,760,352
+val,1122,0,99,4474,442,164,83
+test,1123,0,99,4285,447,169,76
