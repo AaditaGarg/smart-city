@@ -1,0 +1,27 @@
+{
+  "selected_model": "random_forest",
+  "cv_mae_on_val": {
+    "random_forest": 4.977039361232562,
+    "gradient_boosting": 5.015804787904383
+  },
+  "n_val": 1122,
+  "n_test": 1123,
+  "index_mae": 4.814326366203699,
+  "index_rmse": 7.660243122452145,
+  "baseline_detector_index_mae": 5.177480152825838,
+  "baseline_detector_index_rmse": 8.829787027094032,
+  "vehicle_count_mae_detector": 0.9278717720391808,
+  "vehicle_count_rmse_detector": 1.5121944213437006,
+  "level_accuracy": 0.8869100623330365,
+  "level_macro_f1": 0.886843288364152,
+  "baseline_level_accuracy": 0.8699910952804987,
+  "baseline_level_macro_f1": 0.8686703874718461,
+  "refs": {
+    "c_ref": 12.0,
+    "a_ref": 0.39869746746175,
+    "thresholds": [
+      14.217555087469163,
+      38.00051356723143
+    ]
+  }
+}

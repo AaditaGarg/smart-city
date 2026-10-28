@@ -3,7 +3,7 @@
 Vehicle detection, congestion estimation, and road-damage detection with a FastAPI + PostgreSQL backend,
 a React dashboard, and a rule-based decision engine for repair prioritisation and signal recommendations.
 
-> Status: **Steps 1-4 code complete (training scripts written; results pending your runs).** Results/metrics sections are filled only from real training runs in later steps.
+> Status: **Steps 1-6 code complete (API + database); dashboard and decision engine next.** Results/metrics sections are filled only from real training runs in later steps.
 
 ## Prerequisites
 Python 3.10-3.12, Node 18+, Docker (for PostgreSQL), VS Code. A GPU is strongly recommended for training (CPU works for small runs).
@@ -71,6 +71,39 @@ python -m ml.training.congestion --weights models/vehicle_best.pt
 Weights go to `models/`, curves/logs to `runs/<task>/`, run metadata (wall time, versions, device) to
 `models/<task>_train_meta.json`. Congestion uses a proxy target derived from annotated vehicles (KITTI has no
 congestion labels); see the docstring in `ml/training/congestion.py`.
+
+## Evaluation (Step 5)
+```bash
+python -m ml.evaluation.evaluate_yolo --task vehicle --also-cpu
+python -m ml.evaluation.evaluate_yolo --task road_damage --also-cpu
+python -m ml.evaluation.eval_congestion
+python -m ml.evaluation.make_results      # -> reports/RESULTS.md (built from the generated files)
+```
+All metrics are computed on the held-out test split from the saved weights: per-class precision, recall, F1, mAP50,
+mAP50-95, confusion matrices, training curves, prediction images and per-image latency. Classes with fewer than 30
+test instances are flagged as low-confidence.
+
+## API and database (Step 6)
+```bash
+docker compose up -d                      # PostgreSQL
+python scripts/seed_locations.py          # placeholder road segments / intersections (names only)
+uvicorn backend.app.main:app --reload --port 8000     # interactive docs: http://localhost:8000/docs
+```
+Tables (created on startup): `road_segments`, `intersections`, `predictions`, `detections`, `traffic_observations`,
+`road_conditions`, `maintenance_records`, `alerts` (all marked simulated), `signal_recommendations`.
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /predict/vehicles` | image -> vehicle detections + congestion estimate, stored |
+| `POST /predict/road-damage` | image -> damage detections + severity score, stored per segment |
+| `GET /traffic/latest`, `/road-conditions/latest`, `/predictions`, `/alerts` | dashboard data |
+| `POST/GET/PATCH /maintenance` | maintenance records |
+| `GET /model-metrics` | metrics read from `reports/tables/` (real evaluation files) |
+| `GET /health` | database + which model files exist |
+
+Example: `curl -X POST "http://localhost:8000/predict/vehicles?annotate_image=false" -F "file=@<path-to-an-image>"`.
+If weights are missing the API returns 503; it never falls back to fake predictions. The road-damage severity score
+(`decision_engine/scoring.py`) is a heuristic, not calibrated against engineering assessments.
 
 ## Roadmap
 1. Scaffold (done)  2. Datasets  3. Preprocessing  4. Training  5. Evaluation  6. API + DB  7. Dashboard  8. Decision engine  9. Testing + docs

@@ -1,0 +1,34 @@
+{
+  "task": "road_damage",
+  "name": "road_damage",
+  "pretrained": "yolo11n.pt",
+  "device": "mps",
+  "train_args": {
+    "epochs": 25,
+    "imgsz": 512,
+    "batch": 8,
+    "fraction": 1.0,
+    "patience": 12,
+    "workers": 2,
+    "seed": 42,
+    "plots": true,
+    "fliplr": 0.5,
+    "flipud": 0.0,
+    "mosaic": 1.0,
+    "close_mosaic": 5,
+    "degrees": 0.0
+  },
+  "wall_clock_seconds": 6796.0,
+  "ultralytics": "8.4.183",
+  "torch": "2.14.1",
+  "python": "3.13.9",
+  "machine": "macOS-26.6-arm64-arm-64bit-Mach-O",
+  "final_val_metrics": {
+    "metrics/precision(B)": 0.3964849358049916,
+    "metrics/recall(B)": 0.32430077369725874,
+    "metrics/mAP50(B)": 0.3186017838324246,
+    "metrics/mAP50-95(B)": 0.13420550579891133,
+    "fitness": 0.13420550579891133
+  },
+  "best_weights": "/Users/aaditagarg/Downloads/smart-city/models/road_damage_best.pt"
+}

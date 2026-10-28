@@ -1,0 +1,6 @@
+,true_car,true_van,true_truck,true_tram,true_background
+pred_car,2367.0,180.0,26.0,2.0,41010.0
+pred_van,1744.0,153.0,39.0,8.0,21218.0
+pred_truck,85.0,97.0,86.0,16.0,7294.0
+pred_tram,5.0,10.0,18.0,49.0,2627.0
+pred_background,84.0,7.0,0.0,1.0,0.0

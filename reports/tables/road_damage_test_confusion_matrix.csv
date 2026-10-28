@@ -1,0 +1,6 @@
+,true_longitudinal_crack,true_transverse_crack,true_alligator_crack,true_pothole,true_background
+pred_longitudinal_crack,189.0,0.0,56.0,51.0,15068.0
+pred_transverse_crack,10.0,11.0,3.0,12.0,2467.0
+pred_alligator_crack,33.0,1.0,210.0,93.0,8923.0
+pred_pothole,20.0,2.0,44.0,314.0,19290.0
+pred_background,13.0,2.0,3.0,26.0,0.0

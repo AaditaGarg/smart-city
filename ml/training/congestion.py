@@ -77,20 +77,25 @@ def compute_refs(label_dir: Path) -> dict:
     return {"c_ref": c_ref, "a_ref": a_ref, "thresholds": [t1, t2]}
 
 
-def extract_features(weights, split_dir: Path, split: str, classes, refs, conf, imgsz, device) -> pd.DataFrame:
-    from ultralytics import YOLO
-    model = YOLO(str(weights))
+def extract_features(weights, split_dir: Path, split: str, classes, refs, conf, imgsz, device,
+                     model=None, chunk: int = 16) -> pd.DataFrame:
+    """Run the detector over a split in small chunks (a single huge batch exhausts GPU memory)."""
+    if model is None:
+        from ultralytics import YOLO
+        model = YOLO(str(weights))
     imgs = sorted((split_dir / "images" / split).glob("*.*"))
     rows = []
-    for r in model.predict(source=[str(p) for p in imgs], stream=True, conf=conf, imgsz=imgsz,
-                           device=device, verbose=False):
-        stem = Path(r.path).stem
-        b = r.boxes
-        f = features_from_boxes(b.xywhn.cpu().numpy(), b.cls.cpu().numpy(), b.conf.cpu().numpy(), classes)
-        gt = read_gt(split_dir / "labels" / split / f"{stem}.txt")
-        f.update(id=stem, gt_count=float(len(gt)), gt_area_sum=float((gt[:, 3] * gt[:, 4]).sum()),
-                 infer_ms=float(r.speed.get("inference", 0.0)))
-        rows.append(f)
+    for i in range(0, len(imgs), chunk):
+        batch_paths = [str(p) for p in imgs[i:i + chunk]]
+        for r in model.predict(source=batch_paths, conf=conf, imgsz=imgsz, device=device,
+                               batch=chunk, verbose=False):
+            stem = Path(r.path).stem
+            b = r.boxes
+            f = features_from_boxes(b.xywhn.cpu().numpy(), b.cls.cpu().numpy(), b.conf.cpu().numpy(), classes)
+            gt = read_gt(split_dir / "labels" / split / f"{stem}.txt")
+            f.update(id=stem, gt_count=float(len(gt)), gt_area_sum=float((gt[:, 3] * gt[:, 4]).sum()),
+                     infer_ms=float(r.speed.get("inference", 0.0)))
+            rows.append(f)
     df = pd.DataFrame(rows)
     df["gt_index"] = congestion_index(df["gt_count"], df["gt_area_sum"], refs["c_ref"], refs["a_ref"])
     return df

@@ -1,0 +1,40 @@
+{
+  "task": "vehicle",
+  "split": "test",
+  "weights": "/Users/aaditagarg/Downloads/smart-city/models/vehicle_best.pt",
+  "weights_mb": 26.5,
+  "epochs_trained": 10,
+  "imgsz": 640,
+  "device": "mps",
+  "images_evaluated": 1123,
+  "overall": {
+    "precision": 0.7409946626797015,
+    "recall": 0.7517417175595219,
+    "f1": 0.7442811398738353,
+    "mAP50": 0.8009390261115721,
+    "mAP50-95": 0.535754437311863
+  },
+  "latency_ms_per_image": {
+    "mps": {
+      "n_images": 100,
+      "mean_ms": 7.692600420268718,
+      "median_ms": 7.887229498010129,
+      "p95_ms": 12.080112201510929,
+      "fps_from_mean": 129.99505308571167
+    },
+    "cpu": {
+      "n_images": 100,
+      "mean_ms": 13.505380850183428,
+      "median_ms": 13.438207999570295,
+      "p95_ms": 14.260195848328294,
+      "fps_from_mean": 74.04456128213653
+    }
+  },
+  "ultralytics_speed_ms_per_image": {
+    "preprocess": 0.12415954673931066,
+    "inference": 0.7661321594265086,
+    "loss": 4.5856570606041146e-05,
+    "postprocess": 2.0736544175760905
+  },
+  "low_support_classes": []
+}

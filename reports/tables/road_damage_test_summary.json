@@ -1,0 +1,42 @@
+{
+  "task": "road_damage",
+  "split": "test",
+  "weights": "/Users/aaditagarg/Downloads/smart-city/models/road_damage_best.pt",
+  "weights_mb": 5.5,
+  "epochs_trained": 25,
+  "imgsz": 512,
+  "device": "mps",
+  "images_evaluated": 647,
+  "overall": {
+    "precision": 0.50829635855196,
+    "recall": 0.3271269992757922,
+    "f1": 0.3919572401202909,
+    "mAP50": 0.36222494207627187,
+    "mAP50-95": 0.13825767850468954
+  },
+  "latency_ms_per_image": {
+    "mps": {
+      "n_images": 100,
+      "mean_ms": 10.381242869843845,
+      "median_ms": 10.404978998849401,
+      "p95_ms": 12.310718097069184,
+      "fps_from_mean": 96.32757970674874
+    },
+    "cpu": {
+      "n_images": 100,
+      "mean_ms": 22.313317880325485,
+      "median_ms": 22.28285350065562,
+      "p95_ms": 22.89676845248323,
+      "fps_from_mean": 44.816284398553684
+    }
+  },
+  "ultralytics_speed_ms_per_image": {
+    "preprocess": 0.13979759195137917,
+    "inference": 0.7856878532139747,
+    "loss": 7.116537671780913e-05,
+    "postprocess": 3.513243378623057
+  },
+  "low_support_classes": [
+    "transverse_crack"
+  ]
+}
