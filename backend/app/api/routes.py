@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 import cv2
 import numpy as np
@@ -11,22 +11,35 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from decision_engine.scoring import damage_score
+from decision_engine import (
+    calculate_pcu,
+    calculate_repair_priority,
+    damage_score,
+    rank_segments_for_repair,
+    webster_optimum_cycle,
+)
 
+from ..core.config import settings
+from ..core.security import validate_image_security
 from ..db import models as M
 from ..services.model_service import ModelRegistry, annotate
 from . import schemas as S
 from .deps import ROOT, get_db, get_registry
 
 router = APIRouter()
-MAX_UPLOAD = 15 * 1024 * 1024
+MAX_UPLOAD = settings.max_upload_mb * 1024 * 1024
 
 
 # ------------------------------------------------------------------ helpers
 def _decode(file: UploadFile) -> np.ndarray:
     data = file.file.read(MAX_UPLOAD + 1)
     if len(data) > MAX_UPLOAD:
-        raise HTTPException(413, "image larger than 15 MB")
+        raise HTTPException(413, f"image larger than {settings.max_upload_mb} MB")
+    
+    # Fast byte sanity check
+    if len(data) < 16:
+        raise HTTPException(400, "file is too small to be a valid image")
+
     img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         raise HTTPException(400, "file is not a readable image")
@@ -127,11 +140,124 @@ def predict_road_damage(file: UploadFile = File(...), conf: float = Query(0.25, 
         db.add(M.RoadCondition(prediction_id=pred.id, segment_id=segment_id, n_defects=cond["n_defects"],
                                defect_counts=cond["defect_counts"], damage_score=cond["score"],
                                severity=cond["severity"]))
+        
+        # Automatic alert generation for high road damage
+        if cond["severity"] == "high" or cond["score"] >= 50.0:
+            db.add(M.Alert(
+                kind="severe_road_damage",
+                severity="high",
+                message=f"Critical road damage detected on segment {segment_id} (Score: {cond['score']})",
+                segment_id=segment_id,
+                payload={"damage_score": cond["score"], "defect_counts": cond["defect_counts"]},
+                simulated=False,
+            ))
     db.commit()
     return S.PredictOut(prediction_id=pred.id, task="road_damage", model=pred.model_name, image_width=W,
                         image_height=H, inference_ms=round(ms, 2), n_detections=len(dets), counts=_counts(dets),
                         detections=dets, road_condition=cond,
                         annotated_image_b64=annotate(img, dets) if annotate_image else None)
+
+
+# ------------------------------------------------------------------ Dynamic Traffic Signal Optimization (SIH 2025)
+@router.post("/intersections/{intersection_id}/optimize-signal", response_model=S.SignalOptimizationOut)
+def optimize_intersection_signal(intersection_id: int, body: S.SignalOptimizationIn, db: Session = Depends(get_db)):
+    """SIH 2025 Core Endpoint:
+    Calculates Webster's Optimum Cycle & dynamic green splits from YOLO vehicle detections,
+    handles Emergency Vehicle Green Corridor Override, and stores recommendations & alerts.
+    """
+    intersection = db.get(M.Intersection, intersection_id)
+    if intersection is None:
+        raise HTTPException(404, f"Intersection {intersection_id} not found")
+
+    approach_dicts = [app.model_dump() for app in body.approaches]
+    result = webster_optimum_cycle(approach_dicts)
+
+    # Determine congestion level summary
+    total_pcu = sum(a["pcu"] for a in result["phase_timings"])
+    avg_pcu_per_lane = total_pcu / max(1, sum(a.get("lanes", 2) for a in result["phase_timings"]))
+    cong_level = "heavy" if avg_pcu_per_lane > 10.0 else ("moderate" if avg_pcu_per_lane > 4.0 else "free")
+    cong_idx = min(100.0, avg_pcu_per_lane * 7.5)
+
+    # Save to database
+    rec_text = f"Cycle: {result['cycle_length']}s. Mode: {result['mode']}. Sequence: {', '.join(result.get('recommended_phase_sequence', []))}"
+    db_rec = M.SignalRecommendation(
+        intersection_id=intersection_id,
+        congestion_level=cong_level,
+        congestion_index=round(cong_idx, 2),
+        recommendation=rec_text,
+        payload=result,
+    )
+    db.add(db_rec)
+
+    # If Emergency Vehicle is detected, trigger high-priority alert!
+    if result.get("mode") == "EMERGENCY_OVERRIDE":
+        db.add(M.Alert(
+            kind="emergency_vehicle_green_corridor",
+            severity="critical",
+            message=f"EMERGENCY VEHICLE DETECTED at {intersection.name}! Green corridor established on {result.get('emergency_approach')}.",
+            intersection_id=intersection_id,
+            payload={
+                "emergency_approach": result.get("emergency_approach"),
+                "clearing_time_seconds": result.get("cycle_length"),
+            },
+            simulated=False,
+        ))
+
+    db.commit()
+    result["recommendation_id"] = db_rec.id
+    return result
+
+
+@router.post("/signals/optimize-dynamic", response_model=S.SignalOptimizationOut)
+def optimize_dynamic_signals_generic(body: S.SignalOptimizationIn):
+    """Stateless dynamic signal optimization (useful for frontend live simulator and camera feeds)."""
+    approach_dicts = [app.model_dump() for app in body.approaches]
+    result = webster_optimum_cycle(approach_dicts)
+    return result
+
+
+@router.get("/signals/latest", response_model=list[S.SignalRecommendationOut])
+def list_latest_signal_recommendations(limit: int = Query(20, ge=1, le=100), db: Session = Depends(get_db)):
+    """Fetch recent signal timing recommendations."""
+    return db.scalars(select(M.SignalRecommendation).order_by(M.SignalRecommendation.id.desc()).limit(limit)).all()
+
+
+# ------------------------------------------------------------------ Road Repair Prioritisation
+@router.post("/segments/prioritize-repairs", response_model=list[S.RepairPriorityOut])
+def prioritize_city_repairs(db: Session = Depends(get_db)):
+    """Ranks all road segments across the city using composite damage score, traffic importance,
+    and defect hazards (potholes).
+    """
+    segments = db.scalars(select(M.RoadSegment).order_by(M.RoadSegment.id)).all()
+    segment_conditions = []
+
+    for seg in segments:
+        latest_cond = db.scalar(
+            select(M.RoadCondition)
+            .where(M.RoadCondition.segment_id == seg.id)
+            .order_by(M.RoadCondition.id.desc())
+            .limit(1)
+        )
+        if latest_cond:
+            segment_conditions.append({
+                "segment_id": seg.id,
+                "name": seg.name,
+                "traffic_importance": seg.traffic_importance,
+                "damage_score": latest_cond.damage_score,
+                "defect_counts": latest_cond.defect_counts,
+            })
+        else:
+            # Segment has no scans yet; include with baseline
+            segment_conditions.append({
+                "segment_id": seg.id,
+                "name": seg.name,
+                "traffic_importance": seg.traffic_importance,
+                "damage_score": 0.0,
+                "defect_counts": {},
+            })
+
+    ranked = rank_segments_for_repair(segment_conditions)
+    return ranked
 
 
 # ------------------------------------------------------------------ read APIs
@@ -169,6 +295,20 @@ def list_alerts(limit: int = Query(50, ge=1, le=500), db: Session = Depends(get_
     return db.scalars(select(M.Alert).order_by(M.Alert.id.desc()).limit(limit)).all()
 
 
+@router.post("/alerts/{alert_id}/acknowledge")
+def acknowledge_alert(alert_id: int, db: Session = Depends(get_db)):
+    alert = db.get(M.Alert, alert_id)
+    if not alert:
+        raise HTTPException(404, "Alert not found")
+    # Mark acknowledged in payload
+    payload = dict(alert.payload or {})
+    payload["acknowledged"] = True
+    payload["acknowledged_at"] = datetime.now(timezone.utc).isoformat()
+    alert.payload = payload
+    db.commit()
+    return {"status": "success", "alert_id": alert_id, "acknowledged": True}
+
+
 # ------------------------------------------------------------------ maintenance
 @router.post("/maintenance", response_model=S.MaintenanceOut, status_code=201)
 def create_maintenance(body: S.MaintenanceIn, db: Session = Depends(get_db)):
@@ -200,7 +340,7 @@ def update_maintenance(record_id: int, body: S.MaintenanceUpdate, db: Session = 
     return row
 
 
-# ------------------------------------------------------------------ model metrics (read from generated files)
+# ------------------------------------------------------------------ model metrics
 @router.get("/model-metrics")
 def model_metrics():
     t = ROOT / "reports" / "tables"

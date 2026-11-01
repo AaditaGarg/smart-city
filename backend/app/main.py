@@ -8,6 +8,7 @@ from sqlalchemy import text
 from .api.deps import get_registry
 from .api.routes import router
 from .core.config import settings
+from .core.security import RateLimitMiddleware, SecurityHeadersMiddleware
 from .db.session import engine, init_db
 from .services.model_service import ModelUnavailable
 
@@ -21,9 +22,27 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Smart City Intelligence System", version="0.2.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins.split(","), allow_methods=["*"],
-                   allow_headers=["*"])
+app = FastAPI(
+    title="Smart City Intelligence & Dynamic Traffic System",
+    description="SIH 2025 AI-Powered Dynamic Traffic Light Optimization, Road Damage Detection, and Surveillance API.",
+    version="0.3.0",
+    lifespan=lifespan,
+)
+
+# Attach Security Middlewares
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware, max_requests=settings.rate_limit_per_minute, window_seconds=60)
+
+# CORS Configuration
+origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins if origins else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(router)
 
 
@@ -40,4 +59,13 @@ def health():
         db_ok = True
     except Exception:
         db_ok = False
-    return {"status": "ok", "database": db_ok, "models": get_registry().available()}
+    return {
+        "status": "ok",
+        "database": db_ok,
+        "models": get_registry().available(),
+        "security": {
+            "rate_limiter": "active",
+            "security_headers": "enforced",
+            "auth_mode": "enforced" if settings.require_api_key else "permissive_dev",
+        },
+    }

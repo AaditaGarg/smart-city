@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -129,3 +129,74 @@ class AlertOut(ORM):
     intersection_id: Optional[int]
     simulated: bool
     payload: dict
+
+
+# ------------------------------------------------------------------ Traffic Signal Optimization (SIH 2025)
+class ApproachIn(BaseModel):
+    name: str = Field(..., description="e.g. Northbound, Southbound, Eastbound, Westbound")
+    lanes: int = Field(2, ge=1, le=8)
+    counts: Optional[Dict[str, int]] = Field(default_factory=dict, description="Class-wise vehicle counts e.g. {'car': 12, 'truck': 2}")
+    has_emergency: bool = Field(False, description="Emergency vehicle present on this approach (ambulance, fire truck)")
+
+
+class SignalOptimizationIn(BaseModel):
+    intersection_id: Optional[int] = None
+    approaches: List[ApproachIn] = Field(..., min_length=2, max_length=8)
+
+
+class SignalPhaseTimingOut(BaseModel):
+    approach: str
+    lanes: Optional[int] = 2
+    pcu: float
+    counts: Dict[str, int]
+    green_time: float
+    yellow_time: float
+    all_red_time: Optional[float] = 1.5
+    red_time: float
+    green_ratio: Optional[float] = None
+    is_active_green: Optional[bool] = None
+
+
+class SignalBenefitsOut(BaseModel):
+    baseline_fixed_cycle_seconds: float
+    delay_reduction_pct: float
+    fuel_saved_liters_per_hour: float
+    co2_saved_kg_per_hour: float
+
+
+class SignalOptimizationOut(BaseModel):
+    mode: str
+    cycle_length: float
+    total_lost_time: float
+    critical_flow_ratio_Y: Optional[float] = None
+    saturation_status: Optional[str] = None
+    phase_timings: List[SignalPhaseTimingOut]
+    recommended_phase_sequence: Optional[List[str]] = None
+    benefits: Optional[SignalBenefitsOut] = None
+    emergency_approach: Optional[str] = None
+    reason: Optional[str] = None
+    recommendation_id: Optional[int] = None
+
+
+class SignalRecommendationOut(ORM):
+    id: int
+    created_at: datetime
+    intersection_id: int
+    congestion_level: str
+    congestion_index: float
+    recommendation: str
+    payload: dict
+
+
+# ------------------------------------------------------------------ Repair Prioritisation
+class RepairPriorityOut(BaseModel):
+    segment_id: Optional[int]
+    segment_name: str
+    damage_score: float
+    traffic_importance: float
+    priority_score: float
+    priority_level: str
+    recommended_action: str
+    suggested_dispatch_days: int
+    defect_summary: dict
+    requires_alert: bool
