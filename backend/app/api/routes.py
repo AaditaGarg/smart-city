@@ -223,6 +223,7 @@ def list_latest_signal_recommendations(limit: int = Query(20, ge=1, le=100), db:
 
 
 # ------------------------------------------------------------------ Road Repair Prioritisation
+@router.get("/segments/prioritize-repairs", response_model=list[S.RepairPriorityOut])
 @router.post("/segments/prioritize-repairs", response_model=list[S.RepairPriorityOut])
 def prioritize_city_repairs(db: Session = Depends(get_db)):
     """Ranks all road segments across the city using composite damage score, traffic importance,

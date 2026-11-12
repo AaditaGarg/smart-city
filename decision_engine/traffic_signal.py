@@ -141,6 +141,7 @@ def webster_optimum_cycle(
             "phase_timings": [
                 {
                     "approach": app["name"],
+                    "lanes": app["lanes"],
                     "green_time": green_splits[app["name"]],
                     "yellow_time": YELLOW_TIME if app["is_emergency"] else 0.0,
                     "red_time": 0.0 if app["is_emergency"] else (EMERGENCY_GREEN_WINDOW + YELLOW_TIME),

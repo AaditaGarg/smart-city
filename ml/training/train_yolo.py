@@ -59,6 +59,7 @@ def main(argv=None):
     ap.add_argument("--device", default=cfg.get("device_hint", "auto"))
     ap.add_argument("--quick", action="store_true", help="smoke test: 5%% of data, 2 epochs, imgsz 320")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--export-onnx", action="store_true", help="export best weights to optimized ONNX format for fast inference")
     a = ap.parse_args(argv)
 
     tc = cfg[a.task]["train"]
@@ -91,6 +92,15 @@ def main(argv=None):
     models_dir.mkdir(exist_ok=True)
     if best and best.exists():
         shutil.copy2(best, models_dir / f"{name}_best.pt")
+        if a.export_onnx:
+            try:
+                print("Exporting model to optimized ONNX format...")
+                onnx_out = model.export(format="onnx", imgsz=args["imgsz"], dynamic=True, simplify=True)
+                if onnx_out and Path(onnx_out).exists():
+                    shutil.copy2(onnx_out, models_dir / f"{name}_best.onnx")
+                    print(f"Optimized ONNX model saved to: models/{name}_best.onnx")
+            except Exception as e:
+                print(f"ONNX export warning: {e}")
     final = {k: float(v) for k, v in (getattr(results, "results_dict", {}) or {}).items()}
     meta = {"task": a.task, "name": name, "pretrained": a.model or tc["model"], "device": str(device),
             "train_args": args, "wall_clock_seconds": round(wall, 1), "ultralytics": ultralytics.__version__,

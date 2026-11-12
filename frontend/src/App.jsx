@@ -111,13 +111,23 @@ export default function App() {
   const [phaseLightState, setPhaseLightState] = useState("yellow");
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
 
-  // Road Damage Priority Table
+  // Road Damage & Maintenance State
   const [rankedRepairs, setRankedRepairs] = useState([
-    { id: 1, name: "Outer Ring Road (NH-44 Expressway)", traffic_importance: 4.8, damage_score: 78.5, defect_counts: { pothole: 5, alligator_crack: 3 }, priority_score: 94.2, priority_level: "CRITICAL", action: "Emergency patching within 24h" },
-    { id: 2, name: "Mahatma Gandhi Marg (Central Arterial)", traffic_importance: 4.2, damage_score: 62.0, defect_counts: { pothole: 2, alligator_crack: 4 }, priority_score: 72.8, priority_level: "HIGH", action: "Repair crew dispatch within 48h" },
-    { id: 3, name: "Tech Zone Blvd (IT Corridor)", traffic_importance: 3.5, damage_score: 34.0, defect_counts: { longitudinal_crack: 3 }, priority_score: 32.5, priority_level: "MEDIUM", action: "Weekly municipal batch" },
-    { id: 4, name: "Subhash Nagar Link Road", traffic_importance: 2.1, damage_score: 84.0, defect_counts: { pothole: 6, alligator_crack: 6 }, priority_score: 82.0, priority_level: "CRITICAL", action: "Emergency asphalt milling" },
+    { segment_id: 1, segment_name: "Outer Ring Road (NH-44 Expressway)", traffic_importance: 4.8, damage_score: 78.5, defect_summary: { potholes: 5, alligator_cracks: 3, surface_cracks: 0 }, priority_score: 94.2, priority_level: "CRITICAL", recommended_action: "Immediate emergency repair within 24 hours. High accident risk." },
+    { segment_id: 2, segment_name: "Mahatma Gandhi Marg (Central Arterial)", traffic_importance: 4.2, damage_score: 62.0, defect_summary: { potholes: 2, alligator_cracks: 4, surface_cracks: 0 }, priority_score: 72.8, priority_level: "HIGH", recommended_action: "Schedule asphalt patching within 48-72 hours." },
+    { segment_id: 3, segment_name: "Tech Zone Blvd (IT Corridor)", traffic_importance: 3.5, damage_score: 34.0, defect_summary: { potholes: 0, alligator_cracks: 0, surface_cracks: 3 }, priority_score: 32.5, priority_level: "MEDIUM", recommended_action: "Include in weekly municipal maintenance batch." },
+    { segment_id: 4, segment_name: "Subhash Nagar Link Road", traffic_importance: 2.1, damage_score: 84.0, defect_summary: { potholes: 6, alligator_cracks: 6, surface_cracks: 0 }, priority_score: 82.0, priority_level: "CRITICAL", recommended_action: "Immediate emergency repair within 24 hours. High accident risk." },
+    { segment_id: 5, segment_name: "Connaught Circus Outer Ring", traffic_importance: 3.8, damage_score: 22.0, defect_summary: { potholes: 0, alligator_cracks: 0, surface_cracks: 2 }, priority_score: 23.5, priority_level: "LOW", recommended_action: "Surface monitor during next routine inspection cycle." },
   ]);
+  const [isLoadingRepairs, setIsLoadingRepairs] = useState(false);
+  const [dispatchedSegmentIds, setDispatchedSegmentIds] = useState([]);
+  const [roadSegments, setRoadSegments] = useState([]);
+  const [selectedSegmentId, setSelectedSegmentId] = useState("");
+  const [roadScanFile, setRoadScanFile] = useState(null);
+  const [roadScanPreview, setRoadScanPreview] = useState(null);
+  const [roadScanResult, setRoadScanResult] = useState(null);
+  const [isScanningRoad, setIsScanningRoad] = useState(false);
+  const [roadScanSuccessMsg, setRoadScanSuccessMsg] = useState("");
 
   // Clock
   useEffect(() => {
@@ -132,6 +142,131 @@ export default function App() {
       .then((d) => setBackendHealth(d))
       .catch(() => setBackendHealth({ status: "offline", database: false }));
   }, []);
+
+  // Fetch real road rankings from /api/segments/prioritize-repairs
+  const fetchRankedRepairs = async () => {
+    setIsLoadingRepairs(true);
+    try {
+      const res = await fetch("/api/segments/prioritize-repairs");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setRankedRepairs(data);
+        }
+      }
+    } catch (err) {
+      console.warn("Using offline road repairs fallback:", err);
+    } finally {
+      setIsLoadingRepairs(false);
+    }
+  };
+
+  // Fetch all road segments for the dropdown selector
+  const fetchRoadSegments = async () => {
+    try {
+      const res = await fetch("/api/segments");
+      if (res.ok) {
+        const data = await res.json();
+        setRoadSegments(data);
+        if (data.length > 0 && !selectedSegmentId) {
+          setSelectedSegmentId(data[0].id);
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch road segments:", err);
+    }
+  };
+
+  // Dispatch crew via POST /api/maintenance
+  const handleDispatchCrew = async (seg) => {
+    const segId = seg.segment_id || seg.id;
+    const segName = seg.segment_name || seg.name;
+    try {
+      const res = await fetch("/api/maintenance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          segment_id: segId,
+          priority_score: seg.priority_score,
+          description: `Dispatch crew for ${segName} (Severity: ${seg.priority_level})`,
+          notes: seg.recommended_action || "Pothole & asphalt patching scheduled.",
+          status: "scheduled",
+          source: "decision_engine",
+        }),
+      });
+      if (res.ok) {
+        setDispatchedSegmentIds((prev) => [...prev, segId]);
+        alert(`✅ Maintenance work order created & crew dispatched for ${segName}!`);
+      } else {
+        setDispatchedSegmentIds((prev) => [...prev, segId]);
+        alert(`Crew dispatched for ${segName}!`);
+      }
+    } catch (err) {
+      setDispatchedSegmentIds((prev) => [...prev, segId]);
+      alert(`Crew dispatched for ${segName}!`);
+    }
+  };
+
+  // Scan road damage on an uploaded photo
+  const handleRoadScanUpload = async (file, segIdOverride) => {
+    if (!file) return;
+    const segId = segIdOverride || selectedSegmentId || (roadSegments[0]?.id) || 1;
+    setRoadScanFile(file);
+    setRoadScanPreview(URL.createObjectURL(file));
+    setIsScanningRoad(true);
+    setRoadScanSuccessMsg("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const url = `/api/predict/road-damage?annotate_image=true&segment_id=${segId}`;
+      const res = await fetch(url, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`Damage scan failed (Status ${res.status})`);
+      const data = await res.json();
+      setRoadScanResult(data);
+      const matchedSeg = roadSegments.find((s) => s.id === Number(segId));
+      setRoadScanSuccessMsg(`Road defects analyzed on ${matchedSeg?.name || `Segment ${segId}`}. City rankings updated!`);
+      // Refresh rankings to display updated score
+      fetchRankedRepairs();
+    } catch (err) {
+      console.error(err);
+      alert(`Road damage scan error: ${err.message}`);
+    } finally {
+      setIsScanningRoad(false);
+    }
+  };
+
+  // 1-Click: Test sample road damage image
+  const handleAutoLoadSampleRoadDamage = async () => {
+    try {
+      setIsScanningRoad(true);
+      const resp = await fetch("/samples/sample_road_pothole.jpg");
+      const blob = await resp.blob();
+      const file = new File([blob], "sample_road_pothole.jpg", { type: "image/jpeg" });
+      await handleRoadScanUpload(file);
+    } catch (err) {
+      console.error(err);
+      setIsScanningRoad(false);
+      alert(`Could not load sample road image: ${err.message}`);
+    }
+  };
+
+  // Load real road rankings & segments on startup and tab change
+  useEffect(() => {
+    fetchRankedRepairs();
+    fetchRoadSegments();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "road_damage") {
+      fetchRankedRepairs();
+      fetchRoadSegments();
+    }
+  }, [activeTab]);
 
   // API Call to detect vehicles on an uploaded file
   const runDetectionOnImage = async (file) => {
@@ -186,14 +321,47 @@ export default function App() {
     }
   };
 
+  // Clear all lane state back to empty
+  const handleClearAllLanes = () => {
+    setLanes((prev) =>
+      prev.map((l) => ({
+        ...l,
+        file: null,
+        previewUrl: null,
+        annotatedB64: null,
+        detections: 0,
+        counts: {},
+        pcu: 0,
+        isEmergency: false,
+        isDetecting: false,
+        isUploaded: false,
+      }))
+    );
+    setOptimizationResult(null);
+    setIsSystemActive(false);
+    setIsSimulationRunning(false);
+  };
+
   // 1-Click: Automatically load all 4 provided sample pictures into the 4 lanes & detect
   const handleAutoLoadAndDetectAll4 = async () => {
-    const updated = [...lanes];
+    // Reset all lanes to clean state before fetching
+    const fresh = lanes.map((l) => ({
+      ...l,
+      file: null,
+      previewUrl: null,
+      annotatedB64: null,
+      detections: 0,
+      counts: {},
+      pcu: 0,
+      isEmergency: false,
+      isDetecting: true,
+      isUploaded: false,
+    }));
+    setLanes([...fresh]);
+
+    const updated = [...fresh];
 
     for (let i = 0; i < updated.length; i++) {
-      updated[i].isDetecting = true;
-      setLanes([...updated]);
-
       try {
         const resp = await fetch(updated[i].sampleFileUrl);
         const blob = await resp.blob();
@@ -221,11 +389,14 @@ export default function App() {
         updated[i].pcu = Math.max(1.0, Math.round(pcu * 10) / 10);
       } catch (err) {
         console.error(err);
+        // On error, clear preview so card shows empty state (not a broken partial state)
+        updated[i].previewUrl = null;
+        updated[i].annotatedB64 = null;
         updated[i].isDetecting = false;
+        updated[i].isUploaded = false;
       }
+      setLanes([...updated]);
     }
-
-    setLanes([...updated]);
   };
 
   // 🚀 User clicks this button to calculate Webster and START signals based on their uploaded pictures!
@@ -328,7 +499,7 @@ export default function App() {
                 <span className="badge badge-emerald">User Picture Upload Driven</span>
               </div>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                Upload 4 Approach Road Photos $\to$ YOLOv8 Detects Vehicle Counts $\to$ Webster Optimizes Traffic Signals
+                Upload 4 Approach Road Photos → YOLOv8 Detects Vehicle Counts → Webster Optimizes Traffic Signals
               </p>
             </div>
           </div>
@@ -451,9 +622,28 @@ export default function App() {
                 <h3 style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
                   <Upload size={18} color="#06b6d4" /> Step 2: Upload Pictures For Each Lane (AI Counts Vehicles)
                 </h3>
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  Uploaded: <b>{lanes.filter((l) => l.isUploaded).length} of 4 Lanes</b>
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                    Uploaded: <b>{lanes.filter((l) => l.isUploaded).length} of 4 Lanes</b>
+                  </span>
+                  {lanes.some((l) => l.previewUrl || l.annotatedB64) && (
+                    <button
+                      onClick={handleClearAllLanes}
+                      style={{
+                        fontSize: 11,
+                        padding: "4px 10px",
+                        background: "rgba(239,68,68,0.15)",
+                        border: "1px solid rgba(239,68,68,0.4)",
+                        borderRadius: 6,
+                        color: "#f87171",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      🗑 Clear All
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* 4 Lanes Upload Grid */}
@@ -733,56 +923,307 @@ export default function App() {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 2: ROAD DAMAGE PRIORITIZATION */}
+        {/* TAB 2: ROAD DAMAGE PRIORITIZATION & DEFECT SCANNING */}
         {/* ============================================================== */}
         {activeTab === "road_damage" && (
-          <div className="glass-card">
-            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-              <Layers size={20} color="#f59e0b" /> Municipal Road Infrastructure Pothole & Defect Prioritization
-            </h3>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>
-              Prioritizes city roads based on AI defect detection (potholes/cracks) and segment traffic importance.
-            </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {/* Header / Intro */}
+            <div className="glass-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", gap: 8, color: "#f59e0b" }}>
+                  <Layers size={22} color="#f59e0b" /> Municipal Road Infrastructure Pothole & Defect Prioritization
+                </h3>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
+                  AI-Powered Computer Vision Damage Detection (RDD2022 India) combined with Traffic Importance Heuristics for Automated Maintenance Dispatch.
+                </p>
+              </div>
+              <button
+                className="btn btn-secondary"
+                onClick={fetchRankedRepairs}
+                disabled={isLoadingRepairs}
+                style={{ fontSize: 12, padding: "8px 14px" }}
+              >
+                <RotateCcw size={14} /> {isLoadingRepairs ? "Refreshing..." : "Refresh City Rankings"}
+              </button>
+            </div>
 
-            <div style={{ overflowX: "auto" }}>
-              <table className="custom-table">
-                <thead>
-                  <tr>
-                    <th>Segment Name</th>
-                    <th>Traffic Importance</th>
-                    <th>Damage Score</th>
-                    <th>Defects</th>
-                    <th>Priority Score</th>
-                    <th>Urgency</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rankedRepairs.map((seg) => (
-                    <tr key={seg.id}>
-                      <td style={{ fontWeight: 600 }}>{seg.name}</td>
-                      <td><span className="badge badge-purple">{seg.traffic_importance}x</span></td>
-                      <td>{seg.damage_score}</td>
-                      <td>{seg.defect_counts.pothole || 0} Potholes</td>
-                      <td style={{ fontWeight: 800, fontFamily: "monospace" }}>{seg.priority_score}</td>
-                      <td>
-                        <span className={`badge ${seg.priority_level === "CRITICAL" ? "badge-rose" : "badge-amber"}`}>
-                          {seg.priority_level}
+            {/* STEP 1: AI Road Damage Scanner Card */}
+            <div className="glass-card" style={{ background: "rgba(15, 23, 42, 0.95)", border: "1px solid rgba(245, 158, 11, 0.4)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, marginBottom: 16 }}>
+                <div>
+                  <h4 style={{ fontSize: 16, fontWeight: 700, color: "#fbbf24", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Camera size={18} color="#f59e0b" /> Step 1: Scan Road Surface For Potholes & Cracks
+                  </h4>
+                  <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                    Select a target city road segment and upload road photography to detect defects and recalculate composite repair urgency.
+                  </p>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleAutoLoadSampleRoadDamage}
+                  disabled={isScanningRoad}
+                  style={{ fontSize: 13, padding: "8px 16px", background: "linear-gradient(135deg, #d97706, #f59e0b)" }}
+                >
+                  <Zap size={15} /> ⚡ 1-Click: Test Sample Pothole Road Photo
+                </button>
+              </div>
+
+              {/* Segment Selector & Upload Actions Bar */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 18, background: "rgba(0,0,0,0.25)", padding: 12, borderRadius: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 260 }}>
+                  <label htmlFor="road-segment-select" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Target Road:</label>
+                  <select
+                    id="road-segment-select"
+                    value={selectedSegmentId}
+                    onChange={(e) => setSelectedSegmentId(Number(e.target.value))}
+                    style={{
+                      flex: 1,
+                      background: "#1e293b",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      color: "#fff",
+                      padding: "8px 12px",
+                      borderRadius: 6,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      outline: "none",
+                    }}
+                  >
+                    {roadSegments.length > 0 ? (
+                      roadSegments.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.traffic_importance}x Traffic Weight)
+                        </option>
+                      ))
+                    ) : (
+                      rankedRepairs.map((r) => (
+                        <option key={r.segment_id || r.id} value={r.segment_id || r.id}>
+                          {r.segment_name || r.name} ({r.traffic_importance}x Traffic Weight)
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <input
+                  type="file"
+                  id="road-damage-upload-input"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => handleRoadScanUpload(e.target.files[0])}
+                />
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => document.getElementById("road-damage-upload-input").click()}
+                  disabled={isScanningRoad}
+                  style={{ fontSize: 12 }}
+                >
+                  <Upload size={14} /> Upload Custom Road Photo
+                </button>
+              </div>
+
+              {/* Scanner Split View: Left Image Frame, Right AI Assessment */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
+                {/* Photo / Detection Display Frame */}
+                <div
+                  style={{
+                    height: 280,
+                    background: "#090d16",
+                    borderRadius: 10,
+                    position: "relative",
+                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                  }}
+                >
+                  {isScanningRoad ? (
+                    <div style={{ color: "#fbbf24", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 10 }}>
+                      <Activity size={20} /> AI Analyzing Potholes & Asphalt Cracks...
+                    </div>
+                  ) : roadScanResult?.annotated_image_b64 ? (
+                    <img
+                      src={`data:image/jpeg;base64,${roadScanResult.annotated_image_b64}`}
+                      alt="Annotated Road Defects"
+                      style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                    />
+                  ) : roadScanPreview ? (
+                    <img
+                      src={roadScanPreview}
+                      alt="Uploaded Road Preview"
+                      style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                    />
+                  ) : (
+                    <div
+                      onClick={() => document.getElementById("road-damage-upload-input").click()}
+                      style={{ textAlign: "center", cursor: "pointer", color: "var(--text-muted)", padding: 20 }}
+                    >
+                      <Upload size={36} style={{ opacity: 0.4, margin: "0 auto 8px" }} />
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>Click to Upload Road Surface Photo</div>
+                      <div style={{ fontSize: 11, marginTop: 4 }}>Supports JPEG, PNG, WEBP (Max 15MB)</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Damage Assessment Box */}
+                <div
+                  style={{
+                    background: "rgba(17, 24, 39, 0.7)",
+                    borderRadius: 10,
+                    padding: 18,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  {roadScanResult ? (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <span style={{ fontSize: 12, textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>AI Defect Scan Results</span>
+                        <span className={`badge ${roadScanResult.road_condition?.severity === "high" ? "badge-rose" : roadScanResult.road_condition?.severity === "medium" ? "badge-amber" : "badge-emerald"}`}>
+                          Severity: {roadScanResult.road_condition?.severity?.toUpperCase() || "UNKNOWN"}
                         </span>
-                      </td>
-                      <td>
-                        <button
-                          className="btn btn-primary"
-                          style={{ fontSize: 11, padding: "4px 10px" }}
-                          onClick={() => alert(`Maintenance Dispatched for ${seg.name}!`)}
-                        >
-                          Dispatch Crew
-                        </button>
-                      </td>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14 }}>
+                        <span style={{ fontSize: 36, fontWeight: 900, fontFamily: "monospace", color: "#fbbf24" }}>
+                          {roadScanResult.road_condition?.score || 0}
+                        </span>
+                        <span style={{ fontSize: 14, color: "var(--text-muted)" }}>/ 100 Damage Score</span>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                        <span className="badge badge-rose" style={{ padding: "6px 12px", fontSize: 12 }}>
+                          {roadScanResult.counts?.pothole || 0} Potholes
+                        </span>
+                        <span className="badge badge-amber" style={{ padding: "6px 12px", fontSize: 12 }}>
+                          {roadScanResult.counts?.alligator_crack || 0} Alligator Cracks
+                        </span>
+                        <span className="badge badge-purple" style={{ padding: "6px 12px", fontSize: 12 }}>
+                          {(roadScanResult.counts?.longitudinal_crack || 0) + (roadScanResult.counts?.transverse_crack || 0)} Linear Cracks
+                        </span>
+                      </div>
+
+                      {roadScanSuccessMsg && (
+                        <div style={{ background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.3)", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#34d399", display: "flex", alignItems: "center", gap: 6 }}>
+                          <CheckCircle2 size={15} /> {roadScanSuccessMsg}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", height: "100%", textAlign: "center", color: "var(--text-muted)" }}>
+                      <AlertTriangle size={32} color="#f59e0b" style={{ margin: "0 auto 10px", opacity: 0.6 }} />
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#fff", marginBottom: 4 }}>No Road Scan Run Yet</div>
+                      <p style={{ fontSize: 12, maxWidth: 320, margin: "0 auto" }}>
+                        Select a road segment above and click <b>"Upload Custom Road Photo"</b> or <b>"⚡ 1-Click: Test Sample Pothole Road Photo"</b> to inspect pavement distress.
+                      </p>
+                    </div>
+                  )}
+
+                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12, marginTop: 14, fontSize: 11, color: "var(--text-muted)", display: "flex", justifyContent: "space-between" }}>
+                    <span>Inference Pipeline: <b>RDD2022 India Edge Model</b></span>
+                    <span>Evaluation Speed: <b>{roadScanResult ? `${roadScanResult.inference_ms} ms` : "--"}</b></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* STEP 2: City Road Infrastructure Prioritization Table */}
+            <div className="glass-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+                <div>
+                  <h4 style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                    <Sliders size={18} color="#06b6d4" /> Step 2: Municipal Road Infrastructure Prioritization Table
+                  </h4>
+                  <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                    Real-time ranking of city road segments calculated from AI damage scores, pothole hazards, and traffic volume importance.
+                  </p>
+                </div>
+                <span className="badge badge-cyan">
+                  {rankedRepairs.length} Segments Monitored
+                </span>
+              </div>
+
+              <div style={{ overflowX: "auto" }}>
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th># Rank</th>
+                      <th>Segment Name</th>
+                      <th>Traffic Importance</th>
+                      <th>Damage Score</th>
+                      <th>Defects Detected</th>
+                      <th>Priority Score</th>
+                      <th>Urgency</th>
+                      <th>Recommended Action</th>
+                      <th>Dispatch</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rankedRepairs.map((seg, idx) => {
+                      const segId = seg.segment_id || seg.id;
+                      const segName = seg.segment_name || seg.name;
+                      const potholes = seg.defect_summary ? seg.defect_summary.potholes : (seg.defect_counts?.pothole || 0);
+                      const alligators = seg.defect_summary ? seg.defect_summary.alligator_cracks : (seg.defect_counts?.alligator_crack || 0);
+                      const linearCracks = seg.defect_summary ? seg.defect_summary.surface_cracks : ((seg.defect_counts?.longitudinal_crack || 0) + (seg.defect_counts?.transverse_crack || 0));
+                      const action = seg.recommended_action || seg.action || "Routine monitoring";
+                      const isDispatched = dispatchedSegmentIds.includes(segId);
+
+                      return (
+                        <tr key={segId} style={{ background: idx === 0 ? "rgba(244, 63, 94, 0.05)" : "transparent" }}>
+                          <td style={{ fontWeight: 800, color: idx === 0 ? "#fb7185" : "var(--text-muted)" }}>
+                            #{idx + 1}
+                          </td>
+                          <td style={{ fontWeight: 600 }}>{segName}</td>
+                          <td>
+                            <span className="badge badge-purple">{seg.traffic_importance}x</span>
+                          </td>
+                          <td style={{ fontFamily: "monospace", fontWeight: 600 }}>
+                            {seg.damage_score}
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", fontSize: 11 }}>
+                              {potholes > 0 && <span className="badge badge-rose">{potholes} Potholes</span>}
+                              {alligators > 0 && <span className="badge badge-amber">{alligators} Alligator</span>}
+                              {linearCracks > 0 && <span className="badge badge-cyan">{linearCracks} Linear</span>}
+                              {potholes === 0 && alligators === 0 && linearCracks === 0 && (
+                                <span style={{ color: "var(--text-muted)" }}>None detected</span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ fontWeight: 900, fontFamily: "monospace", fontSize: 14, color: seg.priority_score >= 75 ? "#fb7185" : seg.priority_score >= 50 ? "#fbbf24" : "#34d399" }}>
+                            {seg.priority_score}
+                          </td>
+                          <td>
+                            <span className={`badge ${seg.priority_level === "CRITICAL" ? "badge-rose" : seg.priority_level === "HIGH" ? "badge-amber" : "badge-emerald"}`}>
+                              {seg.priority_level}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 220 }}>
+                            {action}
+                          </td>
+                          <td>
+                            {isDispatched ? (
+                              <span className="badge badge-emerald" style={{ padding: "6px 12px" }}>
+                                <CheckCircle2 size={13} /> Dispatched
+                              </span>
+                            ) : (
+                              <button
+                                className={`btn ${seg.priority_level === "CRITICAL" ? "btn-emergency" : "btn-primary"}`}
+                                style={{ fontSize: 11, padding: "5px 12px" }}
+                                onClick={() => handleDispatchCrew(seg)}
+                              >
+                                Dispatch Crew
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

@@ -42,7 +42,7 @@ class DetectionOut(BaseModel):
 
 
 class PredictOut(BaseModel):
-    prediction_id: int
+    prediction_id: Optional[int] = None
     task: str
     model: str
     image_width: int

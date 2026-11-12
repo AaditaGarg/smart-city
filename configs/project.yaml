@@ -15,7 +15,7 @@ vehicle:                # KITTI
     batch: 16
     patience: 10
     workers: 2
-    hyp: {fliplr: 0.5, flipud: 0.0, mosaic: 1.0, close_mosaic: 5, degrees: 0.0}
+    hyp: {fliplr: 0.5, flipud: 0.0, mosaic: 1.0, close_mosaic: 5, degrees: 0.0, cos_lr: true, scale: 0.5}
 
 road_damage:            # RDD2022 India
   raw_dir: data/raw/rdd2022/India/train
@@ -38,7 +38,7 @@ road_damage:            # RDD2022 India
     batch: 16
     patience: 12
     workers: 2
-    hyp: {fliplr: 0.5, flipud: 0.0, mosaic: 1.0, close_mosaic: 5, degrees: 0.0}
+    hyp: {fliplr: 0.5, flipud: 0.0, mosaic: 1.0, close_mosaic: 5, degrees: 0.0, cos_lr: true, scale: 0.5, box: 7.5, cls: 0.75}
 
 congestion:             # scikit-learn model on top of vehicle-detector outputs (proxy target, see congestion.py)
   conf: 0.25
