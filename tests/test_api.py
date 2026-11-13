@@ -47,7 +47,7 @@ def client():
 
 def test_health_reports_db_and_models(client):
     r = client.get("/health").json()
-    assert r["status"] == "ok" and r["database"] is True and set(r["models"]) == {"vehicle", "road_damage", "congestion"}
+    assert r["status"] == "ok" and r["database"] is True and {"vehicle", "road_damage", "congestion"} <= set(r["models"])
 
 
 def test_locations_crud_and_duplicates(client):

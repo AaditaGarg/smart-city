@@ -1,6 +1,11 @@
-"""Loads trained YOLO models lazily with multi-engine acceleration (ONNX Runtime,
-PyTorch MPS/CUDA half-precision) and high-performance Computer Vision edge detection
-for real-world traffic photography and pavement distress surveillance.
+"""Model registry: loads trained YOLO weights (ONNX Runtime preferred, PyTorch otherwise).
+
+Behaviour when weights are missing
+----------------------------------
+By default the registry raises ``ModelUnavailable`` (HTTP 503). It never invents detections.
+For demos without weights you can opt in with ``ALLOW_HEURISTIC_FALLBACK=true``; results are then produced by a
+classical-CV heuristic and the model name is reported as ``<task>_heuristic_DEMO`` so it is visible in API
+responses, the database and the UI.
 """
 from __future__ import annotations
 
@@ -14,40 +19,51 @@ from typing import Any, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
+from ..core.config import settings
+
+ROOT = Path(__file__).resolve().parents[3]
+
 
 class ModelUnavailable(RuntimeError):
     pass
 
 
 class ModelRegistry:
-    def __init__(self, model_dir: Path, device=None):
+    def __init__(self, model_dir: Path, device=None, allow_fallback: Optional[bool] = None):
         self.model_dir, self.device = Path(model_dir), device
+        self.allow_fallback = settings.allow_heuristic_fallback if allow_fallback is None else allow_fallback
         self._models: Dict[str, Tuple[str, Any]] = {}
+        self._load_errors: Dict[str, str] = {}
         self._cong_bundle = None
         self._cong_meta: Optional[Dict[str, Any]] = None
         self._lock = threading.Lock()
 
+    # ------------------------------------------------------------ paths / status
     def weights_path(self, task: str) -> Path:
         return self.model_dir / f"{task}_best.pt"
 
     def onnx_path(self, task: str) -> Path:
         return self.model_dir / f"{task}_best.onnx"
 
+    def has_weights(self, task: str) -> bool:
+        return self.onnx_path(task).exists() or self.weights_path(task).exists()
+
     def model_name(self, task: str) -> str:
-        onnx_p = self.onnx_path(task)
-        if onnx_p.exists():
-            return onnx_p.name
-        pt_p = self.weights_path(task)
-        if pt_p.exists():
-            return pt_p.name
-        return f"{task}_yolov8_edge_optimized"
+        if self.onnx_path(task).exists():
+            return self.onnx_path(task).name
+        if self.weights_path(task).exists():
+            return self.weights_path(task).name
+        if self.allow_fallback:
+            return f"{task}_heuristic_DEMO"
+        return f"{task}_unavailable"
 
     def available(self) -> dict:
         return {
-            "vehicle": True,
-            "road_damage": True,
+            "vehicle": self.has_weights("vehicle"),
+            "road_damage": self.has_weights("road_damage"),
             "congestion": (self.model_dir / "congestion_model.joblib").exists(),
             "onnx_accelerated": any(self.onnx_path(t).exists() for t in ("vehicle", "road_damage")),
+            "heuristic_demo_mode": bool(self.allow_fallback),
         }
 
     def _imgsz(self, task: str) -> int:
@@ -59,146 +75,127 @@ class ModelRegistry:
                 pass
         return 640
 
+    def _class_names(self, task: str) -> List[str]:
+        """Class order used at training time (needed because ONNX files carry no names)."""
+        try:
+            import yaml
+            cfg = yaml.safe_load((ROOT / "configs" / "project.yaml").read_text())
+            if task == "vehicle":
+                return list(cfg["vehicle"]["classes"])
+            return [c["name"] for c in cfg["road_damage"]["classes"]]
+        except Exception:
+            return []
+
+    # ------------------------------------------------------------ loading
     def _load(self, task: str) -> Optional[Tuple[str, Any]]:
-        """Lazy loader prioritizing lightweight ONNX Runtime execution, then PyTorch YOLO."""
-        if task not in self._models:
-            # 1. Check for compiled ONNX model (2x-3x faster CPU execution)
-            onnx_file = self.onnx_path(task)
-            if onnx_file.exists():
-                try:
-                    import onnxruntime as ort
-                    session = ort.InferenceSession(
-                        str(onnx_file),
-                        providers=["CPUExecutionProvider"]
-                    )
-                    self._models[task] = ("onnx", session)
-                    return self._models[task]
-                except Exception:
-                    pass
+        """Lazy loader: ONNX Runtime first, then PyTorch weights. Returns None if no weights/loader."""
+        if task in self._models:
+            return self._models[task]
 
-            # 2. Check for PyTorch YOLO weights
-            pt_file = self.weights_path(task)
-            if not pt_file.exists():
-                for alt_name in ("yolo11n.pt", "yolov8n.pt"):
-                    alt = self.model_dir / alt_name
-                    if alt.exists():
-                        pt_file = alt
-                        break
-                else:
-                    return None
+        onnx_file = self.onnx_path(task)
+        if onnx_file.exists():
+            try:
+                import onnxruntime as ort
+                session = ort.InferenceSession(str(onnx_file), providers=["CPUExecutionProvider"])
+                self._models[task] = ("onnx", session)
+                return self._models[task]
+            except Exception as e:
+                self._load_errors[task] = f"could not load {onnx_file.name}: {e}"
 
+        pt_file = self.weights_path(task)
+        if pt_file.exists():
             try:
                 from ultralytics import YOLO
                 from ml.training.train_yolo import pick_device
                 self.device = self.device if self.device is not None else pick_device("auto")
-                model = YOLO(str(pt_file))
-                self._models[task] = ("yolo", model)
-            except Exception:
-                return None
+                self._models[task] = ("yolo", YOLO(str(pt_file)))
+                return self._models[task]
+            except Exception as e:
+                self._load_errors[task] = f"could not load {pt_file.name}: {e}"
+        return None
 
-        return self._models.get(task)
-
+    # ------------------------------------------------------------ inference
     def detect(self, task: str, img_bgr: np.ndarray, conf: float = 0.25) -> Tuple[List[Dict[str, Any]], float]:
         with self._lock:
-            model_bundle = self._load(task)
-            if model_bundle is not None:
-                m_type, model = model_bundle
-
+            bundle = self._load(task)
+            if bundle is not None:
+                m_type, model = bundle
                 if m_type == "yolo":
                     t0 = time.perf_counter()
-                    # Enable FP16 half precision when running on Apple MPS or CUDA
                     use_half = self.device in ("mps", 0, "cuda:0")
-                    r = model.predict(
-                        img_bgr,
-                        conf=conf,
-                        imgsz=self._imgsz(task),
-                        device=self.device,
-                        half=use_half,
-                        verbose=False
-                    )[0]
+                    r = model.predict(img_bgr, conf=conf, imgsz=self._imgsz(task), device=self.device,
+                                      half=use_half, verbose=False)[0]
                     ms = (time.perf_counter() - t0) * 1000
-                    b = r.boxes
-                    names = model.names
+                    b, names = r.boxes, model.names
                     dets = [
-                        {
-                            "class_name": names[int(c)],
-                            "confidence": float(s),
-                            "x1": float(x1),
-                            "y1": float(y1),
-                            "x2": float(x2),
-                            "y2": float(y2),
-                        }
-                        for c, s, (x1, y1, x2, y2) in zip(
-                            b.cls.cpu().numpy(), b.conf.cpu().numpy(), b.xyxy.cpu().numpy()
-                        )
+                        {"class_name": names[int(c)], "confidence": float(s),
+                         "x1": float(x1), "y1": float(y1), "x2": float(x2), "y2": float(y2)}
+                        for c, s, (x1, y1, x2, y2) in zip(b.cls.cpu().numpy(), b.conf.cpu().numpy(),
+                                                          b.xyxy.cpu().numpy())
                     ]
                     return dets, round(ms, 2)
+                return self._infer_onnx(model, img_bgr, conf, self._imgsz(task), self._class_names(task))
 
-                elif m_type == "onnx":
-                    return self._infer_onnx(model, img_bgr, conf, self._imgsz(task))
+            if self.allow_fallback:
+                return self._cv_edge_detect(task, img_bgr, conf)
 
-            # High-performance Computer Vision edge detector (normalized scale + C++ NMS)
-            return self._cv_edge_detect(task, img_bgr, conf)
+            reason = self._load_errors.get(task) or (
+                f"{task} weights not found: expected {self.onnx_path(task).name} or "
+                f"{self.weights_path(task).name} in {self.model_dir}")
+            raise ModelUnavailable(
+                f"{reason}. Download/train the weights (see models/README.md), or set "
+                f"ALLOW_HEURISTIC_FALLBACK=true for a clearly-labelled demo mode.")
 
-    def _infer_onnx(self, session, img_bgr: np.ndarray, conf: float, imgsz: int = 640) -> Tuple[List[Dict[str, Any]], float]:
-        """Runs accelerated ONNX inference using ONNX Runtime with C++ NMS post-processing."""
+    @staticmethod
+    def _infer_onnx(session, img_bgr: np.ndarray, conf: float, imgsz: int = 640,
+                    names: Optional[List[str]] = None) -> Tuple[List[Dict[str, Any]], float]:
+        """ONNX Runtime inference for YOLOv8/11 exports (output (1, 4+nc, N)); centred letterbox like Ultralytics."""
         t0 = time.perf_counter()
         H, W = img_bgr.shape[:2]
-
-        # Letterbox pre-processing
         scale = min(imgsz / H, imgsz / W)
-        new_w, new_h = int(W * scale), int(H * scale)
+        new_w, new_h = int(round(W * scale)), int(round(H * scale))
+        pad_x, pad_y = (imgsz - new_w) // 2, (imgsz - new_h) // 2
         resized = cv2.resize(img_bgr, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        canvas = np.zeros((imgsz, imgsz, 3), dtype=np.uint8)
-        canvas[:new_h, :new_w] = resized
+        canvas = np.full((imgsz, imgsz, 3), 114, dtype=np.uint8)
+        canvas[pad_y:pad_y + new_h, pad_x:pad_x + new_w] = resized
 
-        # Normalize to float32 [0, 1] RGB NCHW
         blob = cv2.dnn.blobFromImage(canvas, 1.0 / 255.0, (imgsz, imgsz), swapRB=True, crop=False)
-        input_name = session.get_inputs()[0].name
-        outputs = session.run(None, {input_name: blob})[0]
+        out = session.run(None, {session.get_inputs()[0].name: blob})[0]
+        preds = out[0] if out.ndim == 3 else out
+        if preds.shape[0] < preds.shape[1]:          # (4+nc, N) -> (N, 4+nc)
+            preds = preds.T
 
-        # Extract predictions: shape (1, 84, 8400) or (1, 8400, 84)
-        if outputs.ndim == 3 and outputs.shape[1] < outputs.shape[2]:
-            outputs = np.transpose(outputs[0], (1, 0))
-        elif outputs.ndim == 3:
-            outputs = outputs[0]
+        scores = preds[:, 4:]
+        cls_ids = scores.argmax(axis=1)
+        confs = scores.max(axis=1)
+        keep = confs >= conf
+        preds, cls_ids, confs = preds[keep], cls_ids[keep], confs[keep]
 
-        boxes, confidences, class_ids = [], [], []
-        for row in outputs:
-            classes_scores = row[4:]
-            max_score = float(np.max(classes_scores))
-            if max_score >= conf:
-                class_id = int(np.argmax(classes_scores))
-                cx, cy, w, h = row[0], row[1], row[2], row[3]
-                x1 = (cx - w / 2) / scale
-                y1 = (cy - h / 2) / scale
-                bw = w / scale
-                bh = h / scale
-                boxes.append([int(x1), int(y1), int(bw), int(bh)])
-                confidences.append(max_score)
-                class_ids.append(class_id)
-
-        dets = []
-        if boxes:
-            indices = cv2.dnn.NMSBoxes(boxes, confidences, conf, 0.45)
-            if len(indices) > 0:
-                indices = indices.flatten() if hasattr(indices, "flatten") else [i[0] for i in indices]
-                for idx in indices[:20]:
-                    bx, by, bw, bh = boxes[idx]
-                    dets.append({
-                        "class_name": f"class_{class_ids[idx]}",
-                        "confidence": round(confidences[idx], 2),
-                        "x1": float(max(0, bx)),
-                        "y1": float(max(0, by)),
-                        "x2": float(min(W - 1, bx + bw)),
-                        "y2": float(min(H - 1, by + bh)),
-                    })
-
-        ms = (time.perf_counter() - t0) * 1000
-        return dets, round(ms, 2)
+        dets: List[Dict[str, Any]] = []
+        if len(confs):
+            cx, cy, w, h = preds[:, 0], preds[:, 1], preds[:, 2], preds[:, 3]
+            x1 = (cx - w / 2 - pad_x) / scale
+            y1 = (cy - h / 2 - pad_y) / scale
+            boxes = [[float(a), float(b), float(c / scale), float(d / scale)] for a, b, c, d in zip(x1, y1, w, h)]
+            idxs = cv2.dnn.NMSBoxes(boxes, [float(c) for c in confs], conf, 0.45)
+            for i in (np.array(idxs).flatten() if len(idxs) else []):
+                bx, by, bw, bh = boxes[i]
+                cid = int(cls_ids[i])
+                dets.append({
+                    "class_name": names[cid] if names and cid < len(names) else f"class_{cid}",
+                    "confidence": round(float(confs[i]), 4),
+                    "x1": float(max(0.0, bx)), "y1": float(max(0.0, by)),
+                    "x2": float(min(W - 1, bx + bw)), "y2": float(min(H - 1, by + bh)),
+                })
+        return dets, round((time.perf_counter() - t0) * 1000, 2)
 
     def _cv_edge_detect(self, task: str, img_bgr: np.ndarray, conf: float) -> Tuple[List[Dict[str, Any]], float]:
-        """High-performance real-world photography vehicle & road damage detector.
+        """DEMO-ONLY classical-CV heuristic. NOT a trained model; accuracy is unmeasured.
+
+        Only reachable when ALLOW_HEURISTIC_FALLBACK=true. The red/blue "ambulance" rule below is a colour
+        heuristic and must never be relied on for real emergency-vehicle preemption.
+
+        Original description:
         
         Optimizations:
         1. Resolution Normalization: standardizes inference frame to max 640px, speeding up
@@ -315,12 +312,6 @@ class ModelRegistry:
                             "y2": float(min(orig_H - 1, (by + bh) / scale)),
                         })
 
-            # Ambient low-light fallback
-            if len(dets) == 0:
-                dets = [
-                    {"class_name": "car", "confidence": 0.89, "x1": orig_W * 0.18, "y1": orig_H * 0.42, "x2": orig_W * 0.45, "y2": orig_H * 0.76},
-                    {"class_name": "truck", "confidence": 0.84, "x1": orig_W * 0.52, "y1": orig_H * 0.32, "x2": orig_W * 0.88, "y2": orig_H * 0.82},
-                ]
 
         else:
             # Potholes and pavement distress
@@ -380,10 +371,6 @@ class ModelRegistry:
                             "y2": float(min(orig_H - 1, (by + bh) / scale)),
                         })
 
-            if len(dets) == 0:
-                dets = [
-                    {"class_name": "pothole", "confidence": 0.85, "x1": orig_W * 0.3, "y1": orig_H * 0.45, "x2": orig_W * 0.7, "y2": orig_H * 0.75}
-                ]
 
         ms = (time.perf_counter() - t0) * 1000
         return dets[:15], round(ms, 2)
@@ -433,14 +420,14 @@ class ModelRegistry:
                 feat_row = [f[k] for k in meta["features"]]
                 index = float(np.clip(meta["model"].predict([feat_row])[0], 0, 100))
                 level = int(to_level(index, meta["refs"]["thresholds"]))
-                return {"index": round(index, 2), "level": meta["levels"][level]}
+                return {"index": round(index, 2), "level": meta["levels"][level], "source": "random_forest"}
             except Exception:
                 pass
 
         pcu = sum(3.0 if d["class_name"] in ("truck", "tram") else 1.0 for d in dets)
         idx = min(100.0, max(5.0, pcu * 6.5))
         lvl = "heavy" if idx >= 65 else ("moderate" if idx >= 30 else "free")
-        return {"index": round(idx, 1), "level": lvl}
+        return {"index": round(idx, 1), "level": lvl, "source": "rule_based_fallback"}
 
 
 def annotate(img_bgr: np.ndarray, dets: list[dict], default_color=(0, 255, 0)) -> str:

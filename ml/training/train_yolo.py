@@ -105,7 +105,7 @@ def main(argv=None):
     meta = {"task": a.task, "name": name, "pretrained": a.model or tc["model"], "device": str(device),
             "train_args": args, "wall_clock_seconds": round(wall, 1), "ultralytics": ultralytics.__version__,
             "torch": torch.__version__, "python": platform.python_version(), "machine": platform.platform(),
-            "final_val_metrics": final, "best_weights": str(models_dir / f"{name}_best.pt")}
+            "final_val_metrics": final, "best_weights": f"models/{name}_best.pt"}   # repo-relative: no local paths in committed metadata
     (models_dir / f"{name}_train_meta.json").write_text(json.dumps(meta, indent=2))
     print(f"\nDone in {wall / 60:.1f} min. Weights: models/{name}_best.pt | curves: runs/{name}/")
 

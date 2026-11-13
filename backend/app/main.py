@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -52,20 +52,24 @@ async def model_unavailable(_: Request, exc: ModelUnavailable):
 
 
 @app.get("/health")
-def health():
+def health(registry=Depends(get_registry)):
     try:
         with engine.connect() as c:
             c.execute(text("select 1"))
         db_ok = True
     except Exception:
         db_ok = False
+    models = registry.available()
+    weights_ok = bool(models.get("vehicle") and models.get("road_damage"))
     return {
-        "status": "ok",
+        "status": "ok" if (db_ok and weights_ok) else "degraded",
         "database": db_ok,
-        "models": get_registry().available(),
+        "models": models,
         "security": {
             "rate_limiter": "active",
             "security_headers": "enforced",
             "auth_mode": "enforced" if settings.require_api_key else "permissive_dev",
+            "csp": "enabled",
+            "hsts": "enabled",
         },
     }

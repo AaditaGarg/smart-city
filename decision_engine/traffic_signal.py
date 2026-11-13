@@ -151,8 +151,6 @@ def webster_optimum_cycle(
                 }
                 for app in processed_approaches
             ],
-            "estimated_delay_reduction_pct": 100.0,
-            "co2_saved_kg_per_hour": 3.2,
         }
 
     # Standard Webster Optimization
@@ -228,6 +226,8 @@ def webster_optimum_cycle(
             "delay_reduction_pct": delay_reduction_pct,
             "fuel_saved_liters_per_hour": fuel_saved_liters,
             "co2_saved_kg_per_hour": co2_saved_kg,
+            # These are rule-of-thumb estimates (see est_*_delay above), NOT simulation or field measurements.
+            "basis": "heuristic_estimate",
         },
     }
 
