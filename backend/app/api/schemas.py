@@ -159,10 +159,14 @@ class SignalPhaseTimingOut(BaseModel):
 
 class SignalBenefitsOut(BaseModel):
     baseline_fixed_cycle_seconds: float
-    delay_reduction_pct: float
-    fuel_saved_liters_per_hour: float
-    co2_saved_kg_per_hour: float
-    basis: str = "heuristic_estimate"   # not measured; see decision_engine/traffic_signal.py
+    # The next four are None when the intersection is oversaturated (demand > capacity): no valid estimate exists.
+    delay_reduction_pct: Optional[float] = None
+    fuel_saved_liters_per_hour: Optional[float] = None
+    co2_saved_kg_per_hour: Optional[float] = None
+    avg_delay_s_dynamic: Optional[float] = None
+    avg_delay_s_fixed: Optional[float] = None
+    oversaturated: Optional[bool] = None   # True: demand exceeds capacity, real delay is higher than reported
+    basis: str = "analytical_webster_uniform_delay"   # analytical on estimated flows, not simulated or measured
 
 
 class SignalOptimizationOut(BaseModel):
@@ -175,6 +179,7 @@ class SignalOptimizationOut(BaseModel):
     recommended_phase_sequence: Optional[List[str]] = None
     benefits: Optional[SignalBenefitsOut] = None
     emergency_approach: Optional[str] = None
+    emergency_approaches: Optional[List[str]] = None   # all emergency approaches, in service order
     reason: Optional[str] = None
     recommendation_id: Optional[int] = None
 

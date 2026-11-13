@@ -12,11 +12,11 @@ An end-to-end intelligent transportation and urban infrastructure system integra
    - Converts detected vehicle counts into **PCU (Passenger Car Units)** per Indian Roads Congress standards (IRC: 106-1990).
    - Dynamically calculates optimal intersection cycle length and green splits via **Webster’s Optimum Cycle Formula**:
      $$C_o = \frac{1.5 L + 5}{1 - Y}$$
-   - Reports an *estimated* delay/fuel/CO2 saving versus a fixed-time plan. These figures come from a rule-of-thumb model (`basis: "heuristic_estimate"` in the API response); they are **not** measured or simulated results.
+   - Reports an *estimated* delay/fuel/CO2 saving versus an equal-split fixed-time plan, computed analytically with Webster's uniform-delay formula (`basis: "analytical_webster_uniform_delay"` in the API response). It runs on flows estimated from detected counts, so it is **not** a simulation or field measurement. When demand exceeds capacity (`benefits.oversaturated: true`) the formula is invalid and the savings fields are `null` instead of a made-up number.
 
 2. **Emergency Vehicle Priority ("Green Corridor")**:
    - Emergency presence is an **input** to the signal engine (`has_emergency` flag per approach, or an `ambulance` / `fire_truck` / `police` class in the detections). The trained vehicle model only knows car, van, truck and tram, so it does **not** detect ambulances. A colour-based beacon heuristic exists only in the optional demo mode (see below) and must not be relied on.
-   - When flagged, the engine preempts normal cycle to activate an uninterrupted **Green Corridor** while putting conflicting lanes on safe all-red hold.
+   - When flagged, the engine preempts normal cycle to activate an uninterrupted **Green Corridor** while putting conflicting lanes on safe all-red hold. If several approaches are flagged at once they are served one after another (`emergency_approaches`, 40 s each).
    - Pushes instantaneous critical alerts to city traffic command controllers.
 
 3. **Road Damage AI Surveillance & Repair Prioritization**:

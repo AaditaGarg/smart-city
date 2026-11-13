@@ -187,13 +187,15 @@ def optimize_intersection_signal(intersection_id: int, body: S.SignalOptimizatio
 
     # If Emergency Vehicle is detected, trigger high-priority alert!
     if result.get("mode") == "EMERGENCY_OVERRIDE":
+        em_list = result.get("emergency_approaches") or [result.get("emergency_approach")]
         db.add(M.Alert(
             kind="emergency_vehicle_green_corridor",
             severity="critical",
-            message=f"EMERGENCY VEHICLE DETECTED at {intersection.name}! Green corridor established on {result.get('emergency_approach')}.",
+            message=f"EMERGENCY VEHICLE DETECTED at {intersection.name}! Green corridor established on {', '.join(em_list)}.",
             intersection_id=intersection_id,
             payload={
                 "emergency_approach": result.get("emergency_approach"),
+                "emergency_approaches": em_list,
                 "clearing_time_seconds": result.get("cycle_length"),
             },
             simulated=False,
