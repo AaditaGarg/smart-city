@@ -20,25 +20,21 @@ from decision_engine import (
 )
 
 from ..core.config import settings
-from ..core.security import validate_image_security
+from ..core.security import validate_image_security, verify_api_key
 from ..db import models as M
 from ..services.model_service import ModelRegistry, annotate
 from . import schemas as S
 from .deps import ROOT, get_db, get_registry
 
 router = APIRouter()
+WRITE = [Depends(verify_api_key)]   # no-op unless REQUIRE_API_KEY=true
 MAX_UPLOAD = settings.max_upload_mb * 1024 * 1024
 
 
 # ------------------------------------------------------------------ helpers
 def _decode(file: UploadFile) -> np.ndarray:
     data = file.file.read(MAX_UPLOAD + 1)
-    if len(data) > MAX_UPLOAD:
-        raise HTTPException(413, f"image larger than {settings.max_upload_mb} MB")
-    
-    # Fast byte sanity check
-    if len(data) < 16:
-        raise HTTPException(400, "file is too small to be a valid image")
+    validate_image_security(data, file.filename or "")      # size + magic-byte check (JPEG/PNG/WEBP)
 
     img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
@@ -72,7 +68,7 @@ def _counts(dets):
 
 
 # ------------------------------------------------------------------ locations
-@router.post("/segments", response_model=S.SegmentOut, status_code=201)
+@router.post("/segments", response_model=S.SegmentOut, status_code=201, dependencies=WRITE)
 def create_segment(body: S.SegmentIn, db: Session = Depends(get_db)):
     if db.scalar(select(M.RoadSegment).where(M.RoadSegment.name == body.name)):
         raise HTTPException(409, "segment name already exists")
@@ -87,7 +83,7 @@ def list_segments(db: Session = Depends(get_db)):
     return db.scalars(select(M.RoadSegment).order_by(M.RoadSegment.id)).all()
 
 
-@router.post("/intersections", response_model=S.IntersectionOut, status_code=201)
+@router.post("/intersections", response_model=S.IntersectionOut, status_code=201, dependencies=WRITE)
 def create_intersection(body: S.IntersectionIn, db: Session = Depends(get_db)):
     if db.scalar(select(M.Intersection).where(M.Intersection.name == body.name)):
         raise HTTPException(409, "intersection name already exists")
@@ -103,7 +99,7 @@ def list_intersections(db: Session = Depends(get_db)):
 
 
 # ------------------------------------------------------------------ inference
-@router.post("/predict/vehicles", response_model=S.PredictOut)
+@router.post("/predict/vehicles", response_model=S.PredictOut, dependencies=WRITE)
 def predict_vehicles(file: UploadFile = File(...), conf: float = Query(0.25, ge=0.01, le=0.99),
                      segment_id: Optional[int] = None, intersection_id: Optional[int] = None,
                      annotate_image: bool = False, db: Session = Depends(get_db),
@@ -126,7 +122,7 @@ def predict_vehicles(file: UploadFile = File(...), conf: float = Query(0.25, ge=
                         congestion=cong, annotated_image_b64=annotate(img, dets, (0, 200, 0)) if annotate_image else None)
 
 
-@router.post("/predict/road-damage", response_model=S.PredictOut)
+@router.post("/predict/road-damage", response_model=S.PredictOut, dependencies=WRITE)
 def predict_road_damage(file: UploadFile = File(...), conf: float = Query(0.25, ge=0.01, le=0.99),
                         segment_id: Optional[int] = None, annotate_image: bool = False,
                         db: Session = Depends(get_db), registry: ModelRegistry = Depends(get_registry)):
@@ -159,7 +155,7 @@ def predict_road_damage(file: UploadFile = File(...), conf: float = Query(0.25, 
 
 
 # ------------------------------------------------------------------ Dynamic Traffic Signal Optimization (SIH 2025)
-@router.post("/intersections/{intersection_id}/optimize-signal", response_model=S.SignalOptimizationOut)
+@router.post("/intersections/{intersection_id}/optimize-signal", response_model=S.SignalOptimizationOut, dependencies=WRITE)
 def optimize_intersection_signal(intersection_id: int, body: S.SignalOptimizationIn, db: Session = Depends(get_db)):
     """SIH 2025 Core Endpoint:
     Calculates Webster's Optimum Cycle & dynamic green splits from YOLO vehicle detections,
@@ -208,7 +204,7 @@ def optimize_intersection_signal(intersection_id: int, body: S.SignalOptimizatio
     return result
 
 
-@router.post("/signals/optimize-dynamic", response_model=S.SignalOptimizationOut)
+@router.post("/signals/optimize-dynamic", response_model=S.SignalOptimizationOut, dependencies=WRITE)
 def optimize_dynamic_signals_generic(body: S.SignalOptimizationIn):
     """Stateless dynamic signal optimization (useful for frontend live simulator and camera feeds)."""
     approach_dicts = [app.model_dump() for app in body.approaches]
@@ -224,7 +220,7 @@ def list_latest_signal_recommendations(limit: int = Query(20, ge=1, le=100), db:
 
 # ------------------------------------------------------------------ Road Repair Prioritisation
 @router.get("/segments/prioritize-repairs", response_model=list[S.RepairPriorityOut])
-@router.post("/segments/prioritize-repairs", response_model=list[S.RepairPriorityOut])
+@router.post("/segments/prioritize-repairs", response_model=list[S.RepairPriorityOut], dependencies=WRITE)
 def prioritize_city_repairs(db: Session = Depends(get_db)):
     """Ranks all road segments across the city using composite damage score, traffic importance,
     and defect hazards (potholes).
@@ -296,7 +292,7 @@ def list_alerts(limit: int = Query(50, ge=1, le=500), db: Session = Depends(get_
     return db.scalars(select(M.Alert).order_by(M.Alert.id.desc()).limit(limit)).all()
 
 
-@router.post("/alerts/{alert_id}/acknowledge")
+@router.post("/alerts/{alert_id}/acknowledge", dependencies=WRITE)
 def acknowledge_alert(alert_id: int, db: Session = Depends(get_db)):
     alert = db.get(M.Alert, alert_id)
     if not alert:
@@ -311,7 +307,7 @@ def acknowledge_alert(alert_id: int, db: Session = Depends(get_db)):
 
 
 # ------------------------------------------------------------------ maintenance
-@router.post("/maintenance", response_model=S.MaintenanceOut, status_code=201)
+@router.post("/maintenance", response_model=S.MaintenanceOut, status_code=201, dependencies=WRITE)
 def create_maintenance(body: S.MaintenanceIn, db: Session = Depends(get_db)):
     _require(db, M.RoadSegment, body.segment_id, "segment")
     row = M.MaintenanceRecord(**body.model_dump())
@@ -328,7 +324,7 @@ def list_maintenance(status: Optional[str] = None, db: Session = Depends(get_db)
     return db.scalars(q).all()
 
 
-@router.patch("/maintenance/{record_id}", response_model=S.MaintenanceOut)
+@router.patch("/maintenance/{record_id}", response_model=S.MaintenanceOut, dependencies=WRITE)
 def update_maintenance(record_id: int, body: S.MaintenanceUpdate, db: Session = Depends(get_db)):
     row = db.get(M.MaintenanceRecord, record_id)
     if row is None:

@@ -1,13 +1,29 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# Secrets / local config
 .env
+
+# Databases (created automatically on first run)
+*.db
+*.sqlite3
+
+# Node
 node_modules/
 frontend/dist/
+
+# Data & training artefacts
 data/raw/*
 data/interim/*
 data/processed/*
 runs/*
+
+# Model weights: publish them via GitHub Releases / Git LFS (see models/README.md)
 *.pt
 *.onnx
+
+# Keep placeholder files
 !**/.gitkeep

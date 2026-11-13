@@ -162,6 +162,7 @@ class SignalBenefitsOut(BaseModel):
     delay_reduction_pct: float
     fuel_saved_liters_per_hour: float
     co2_saved_kg_per_hour: float
+    basis: str = "heuristic_estimate"   # not measured; see decision_engine/traffic_signal.py
 
 
 class SignalOptimizationOut(BaseModel):

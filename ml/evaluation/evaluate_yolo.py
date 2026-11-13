@@ -163,7 +163,7 @@ def main(argv=None):
     prediction_grid(model, out_dir, a.split, names, figs / f"{tag}_predictions.png", imgsz=imgsz, device=device)
 
     overall = df.iloc[-1]
-    summary = {"task": a.task, "split": a.split, "weights": str(weights),
+    summary = {"task": a.task, "split": a.split, "weights": _rel(weights),
                "weights_mb": round(weights.stat().st_size / 1e6, 1), "epochs_trained": epochs, "imgsz": imgsz,
                "device": str(device), "images_evaluated": n_img,
                "overall": {k: clean(overall[k]) for k in ["precision", "recall", "f1", "mAP50", "mAP50-95"]},
@@ -173,6 +173,14 @@ def main(argv=None):
     (tables / f"{tag}_summary.json").write_text(json.dumps(summary, indent=2))
     print(df.to_string(index=False))
     print(json.dumps({k: summary[k] for k in ("overall", "latency_ms_per_image", "low_support_classes")}, indent=2))
+
+
+def _rel(path: Path) -> str:
+    """Repo-relative path so reports do not leak local machine paths."""
+    try:
+        return Path(path).resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return Path(path).name
 
 
 if __name__ == "__main__":
