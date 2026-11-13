@@ -46,7 +46,10 @@ def test_signal_optimization_dynamic_generic(client):
     assert data["mode"] == "WEBSTER_DYNAMIC_OPTIMIZED"
     assert data["cycle_length"] >= 45.0
     assert len(data["phase_timings"]) == 4
-    assert data["benefits"]["delay_reduction_pct"] > 0
+    # This payload exceeds capacity under the flow model, so no savings figure is claimed (see traffic_signal.py)
+    assert data["benefits"]["oversaturated"] is True
+    assert data["benefits"]["delay_reduction_pct"] is None
+    assert data["benefits"]["basis"] == "analytical_webster_uniform_delay"
     # Northbound (highest PCU) should receive highest or equal green time
     nb_timing = next(p for p in data["phase_timings"] if p["approach"] == "Northbound")
     eb_timing = next(p for p in data["phase_timings"] if p["approach"] == "Eastbound")

@@ -31,7 +31,9 @@ def test_webster_optimum_cycle_calculation():
     ns_green = res["phase_timings"][0]["green_time"]
     ew_green = res["phase_timings"][1]["green_time"]
     assert ns_green >= ew_green
-    assert res["benefits"]["delay_reduction_pct"] > 0
+    # Demand exceeds capacity here (Y > 1), so the uniform-delay model is invalid: no savings claimed.
+    assert res["benefits"]["oversaturated"] is True
+    assert res["benefits"]["delay_reduction_pct"] is None
 
 
 def test_emergency_green_corridor_override():
@@ -71,3 +73,56 @@ def test_rank_segments_for_repair():
     assert len(ranked) == 2
     # Highway with potholes and high importance should be ranked #1
     assert ranked[0]["segment_id"] == 2
+
+
+def test_multiple_emergencies_are_served_in_sequence():
+    """Two approaches reporting an emergency must both get green (in turn); none may be flagged green with 0 s."""
+    approaches = [
+        {"name": "N", "counts": {"car": 3}, "has_emergency": True},
+        {"name": "E", "counts": {"car": 3}, "has_emergency": True},
+        {"name": "S", "counts": {"car": 3}},
+    ]
+    res = webster_optimum_cycle(approaches)
+    assert res["mode"] == "EMERGENCY_OVERRIDE"
+    assert res["emergency_approaches"] == ["N", "E"]
+    assert res["emergency_approach"] == "N"
+    by_name = {p["approach"]: p for p in res["phase_timings"]}
+    for name in ("N", "E"):
+        assert by_name[name]["is_active_green"] is True and by_name[name]["green_time"] > 0
+    assert by_name["S"]["is_active_green"] is False and by_name["S"]["green_time"] == 0
+    # every approach flagged active green actually has green time
+    assert all(p["green_time"] > 0 for p in res["phase_timings"] if p["is_active_green"])
+    assert res["cycle_length"] == 2 * 40.0 + res["total_lost_time"]
+
+
+def test_single_emergency_output_unchanged():
+    res = webster_optimum_cycle([{"name": "N", "counts": {"car": 3}}, {"name": "E", "counts": {"ambulance": 1}}])
+    assert res["emergency_approaches"] == ["E"]
+    east = next(p for p in res["phase_timings"] if p["approach"] == "E")
+    assert east["red_time"] == 0.0 and east["is_active_green"] is True
+
+
+def test_delay_savings_computed_from_webster_delay_model():
+    # Unbalanced, below capacity: Webster's plan should beat the equal-split fixed plan by a real margin.
+    res = webster_optimum_cycle([{"name": "A", "counts": {"car": 9}}, {"name": "B", "counts": {"car": 2}}])
+    b = res["benefits"]
+    assert b["oversaturated"] is False
+    assert b["avg_delay_s_dynamic"] < b["avg_delay_s_fixed"]
+    expected = round((b["avg_delay_s_fixed"] - b["avg_delay_s_dynamic"]) / b["avg_delay_s_fixed"] * 100, 1)
+    assert abs(b["delay_reduction_pct"] - expected) < 0.2          # rounding of the two averages
+    assert b["fuel_saved_liters_per_hour"] > 0
+    assert b["basis"] == "analytical_webster_uniform_delay"
+
+
+def test_savings_not_a_constant_floor():
+    """Regression: the old heuristic clamped savings to 15-55%, even for an almost empty junction."""
+    light = webster_optimum_cycle([{"name": "A", "counts": {"car": 5}}, {"name": "B", "counts": {"car": 5}}])
+    skewed = webster_optimum_cycle([{"name": "A", "counts": {"car": 9}}, {"name": "B", "counts": {"car": 2}}])
+    assert light["benefits"]["delay_reduction_pct"] != skewed["benefits"]["delay_reduction_pct"]
+
+
+def test_oversaturated_reports_no_savings():
+    res = webster_optimum_cycle([{"name": "A", "counts": {"car": 200}}, {"name": "B", "counts": {"car": 200}}])
+    b = res["benefits"]
+    assert b["oversaturated"] is True
+    assert b["delay_reduction_pct"] is None and b["fuel_saved_liters_per_hour"] is None
