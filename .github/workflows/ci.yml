@@ -17,7 +17,7 @@ jobs:
       - name: Install lightweight test dependencies (no GPU / PyTorch needed)
         run: |
           pip install fastapi "uvicorn[standard]" sqlalchemy pydantic pydantic-settings httpx python-multipart \
-                      pytest numpy pandas scikit-learn joblib pyyaml opencv-python-headless albumentations
+                      pytest numpy pandas scikit-learn joblib pyyaml opencv-python-headless albumentations Pillow
       - name: Run tests
         run: pytest tests -q
 
