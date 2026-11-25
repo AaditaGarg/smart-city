@@ -1,7 +1,7 @@
 {
   "task": "vehicle",
   "split": "test",
-  "weights": "/Users/aaditagarg/Downloads/smart-city/models/vehicle_best.pt",
+  "weights": "models/vehicle_best.pt",
   "weights_mb": 26.5,
   "epochs_trained": 10,
   "imgsz": 640,

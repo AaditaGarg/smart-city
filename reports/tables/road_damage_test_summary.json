@@ -1,7 +1,7 @@
 {
   "task": "road_damage",
   "split": "test",
-  "weights": "/Users/aaditagarg/Downloads/smart-city/models/road_damage_best.pt",
+  "weights": "models/road_damage_best.pt",
   "weights_mb": 5.5,
   "epochs_trained": 25,
   "imgsz": 512,

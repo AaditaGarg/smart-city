@@ -30,5 +30,5 @@
     "metrics/mAP50-95(B)": 0.05470627752001238,
     "fitness": 0.05470627752001238
   },
-  "best_weights": "/Users/aaditagarg/Downloads/smart-city/models/vehicle_quick_best.pt"
+  "best_weights": "models/vehicle_quick_best.pt"
 }

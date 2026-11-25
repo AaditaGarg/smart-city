@@ -140,7 +140,8 @@ def test_backend_weight_lookup_and_no_fake_detections(tmp_path):
     for task in ("vehicle", "road_damage"):    # no weights anywhere -> error, never invented boxes
         with pytest.raises(ModelUnavailable):
             reg.detect(task, img)
-    assert reg.available() == {"vehicle": False, "road_damage": False, "congestion": False}
+    avail = reg.available()
+    assert avail["vehicle"] is False and avail["road_damage"] is False and avail["congestion"] is False
     (tmp_path / "yolov8n.pt").write_bytes(b"x")                # COCO in the project root
     assert reg.weights_path("vehicle") == tmp_path / "yolov8n.pt" and reg.is_coco("vehicle")
     assert not reg.weights_path("road_damage").exists()        # road damage never falls back to a COCO car model

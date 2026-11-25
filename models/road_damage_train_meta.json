@@ -30,5 +30,5 @@
     "metrics/mAP50-95(B)": 0.13420550579891133,
     "fitness": 0.13420550579891133
   },
-  "best_weights": "/Users/aaditagarg/Downloads/smart-city/models/road_damage_best.pt"
+  "best_weights": "models/road_damage_best.pt"
 }

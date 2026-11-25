@@ -4,7 +4,7 @@
 
 **Our solution:** camera photos or video → YOLO vehicle detection (Indian classes) → queue in PCU (IRC:106) → **Max-Pressure network signal control**, which coordinates every junction. The network is the 4 real signals on **Vikas Marg, Delhi** (positions from OpenStreetMap). A fixed safety layer sits on top of the controller, and the results are measured in a simulator against today's fixed timers.
 
-The project also includes road-damage detection and repair prioritisation (RDD2022 India), a FastAPI backend and a React dashboard.
+The project also includes single-junction Webster optimization, road-damage detection and repair prioritisation (RDD2022 India), a FastAPI backend with security hardening (rate limiting, CSP/HSTS headers, magic-byte upload validation, optional API-key auth), and a React dashboard.
 
 ---
 
@@ -12,7 +12,7 @@ The project also includes road-damage detection and repair prioritisation (RDD20
 
 | Step | What happens |
 |---|---|
-| 1. Count | YOLO counts bikes, cars, autos, buses, trucks and ambulances on each approach (photo, or video at 1 frame/s). |
+| 1. Count | YOLO (ONNX Runtime or PyTorch) counts bikes, cars, autos, buses, trucks and ambulances on each approach (photo, or video at 1 frame/s). |
 | 2. Queue | Counts are converted to PCU (bike 0.5, car 1.0, auto 1.2, bus/truck 2.2). If the queue fills the whole camera view, the road is marked "beyond camera" and a running balance (arrivals − departures) is kept. |
 | 3. Choose | **Max-Pressure**: pressure = queue waiting − ½ × queue on the road it feeds. A road whose exit is ≥ 85 % full gets zero pressure, so we never push cars into a jam. Roads waiting long get an ageing boost. |
 | 4. Time | Green lasts long enough to clear the queue (2 s start-up + 1.3 × queue ÷ saturation flow, with saturation flow S = 525 × road width PCU/h), between 10 and 60 s. It ends early if the stop line is empty in **2 checks in a row**. It is extended if the queue is still the heaviest. |
@@ -49,9 +49,11 @@ py -3.13 -m venv .venv
 .venv\Scripts\python -m uvicorn backend.app.main:app --port 8000     # API docs: http://localhost:8000/docs
 ```
 
+> **Model weights:** Put `vehicle_best.pt` (or `indian_vehicle_best.pt` / `yolov8n.pt`) and `road_damage_best.pt` in `models/` (see [`models/README.md`](models/README.md)). Without weights, prediction endpoints return **HTTP 503** (or set `ALLOW_HEURISTIC_FALLBACK=true` in `.env` for demo mode).
 ```bash
 cd frontend && npm install && npm run dev                            # dashboard: http://localhost:5173
 ```
+
 
 ```bash
 .venv\Scripts\python -m pytest tests -q
@@ -92,12 +94,18 @@ decision_engine/
   queue_estimator.py   # beyond-camera queues, turn-ratio learning, 2-frame ambulance confirmation
   network_sim.py       # seeded simulator of Indian mixed traffic + metrics
   rl_env.py            # Gymnasium environment for the shared RL policy
-  traffic_signal.py    # PCU (IRC:106), single-junction Webster + HCM 2000 delay estimate
+  tracking.py          # multi-object vehicle tracking across frames
+  traffic_signal.py    # PCU (IRC:106), single-junction Webster + analytical delay estimate
 configs/network_corridor.yaml   # Vikas Marg (OSM) + grid + scenarios
-backend/app/api/network_routes.py
-frontend/src/tabs/              # the five dashboard tabs
+backend/app/
+  api/routes.py                 # REST endpoints including Webster signals & repair rankings
+  api/network_routes.py         # Multi-junction Max-Pressure, simulation & camera endpoints
+  core/security.py              # Security headers, rate limiting, magic-byte upload validation, API-key
+  services/model_service.py     # ONNX / PyTorch YOLO loading, 503 when weights are missing
+frontend/src/tabs/              # the dashboard tabs
 scripts/make_network_report.py  # measured comparison -> reports/
 ml/training/train_rl.py         # RL training + deployment check
+tests/                          # automated pytest test suite (CI: .github/workflows/ci.yml)
 ```
 
 ## Honest limits
