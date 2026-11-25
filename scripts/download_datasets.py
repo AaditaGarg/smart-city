@@ -3,6 +3,7 @@
   python scripts/download_datasets.py kitti                   # vehicles (~390 MB, auto)
   python scripts/download_datasets.py rdd2022 --countries India Czech
   python scripts/download_datasets.py rdd2022 --local-zip ~/Downloads/RDD2022_India.zip
+  python scripts/download_datasets.py indian                  # Indian vehicles + ambulances (Kaggle, ~460 MB)
   python scripts/download_datasets.py stats                   # real counts of what is on disk
 
 Every run appends to data/raw/MANIFEST.json (source, license, file size, sha256).
@@ -14,6 +15,7 @@ import hashlib
 import json
 import shutil
 import sys
+import xml.etree.ElementTree as ET
 import zipfile
 from collections import Counter
 from datetime import datetime, timezone
@@ -28,6 +30,11 @@ MANIFEST = RAW / "MANIFEST.json"
 
 KITTI_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0/kitti.zip"
 FIGSHARE_API = "https://api.figshare.com/v2/articles/21431547"  # RDD2022 record
+KAGGLE_INDIAN = {  # data/raw/<dir>: (kaggle slug, licence as stated on the Kaggle page)
+    "indian_vehicle": ("dataclusterlabs/indian-vehicle-dataset",
+                       "Copyright: the authors (DataCluster Labs) - academic use only, do not redistribute"),
+    "ambulance": ("manpreetsingh04/ambulance", "CC BY-SA 4.0"),
+}
 RDD_FILE_NAMES = {  # per-country archive names listed on the RDD2022 GitHub page
     "Japan": "RDD2022_Japan.zip", "India": "RDD2022_India.zip", "Czech": "RDD2022_Czech.zip",
     "Norway": "RDD2022_Norway.zip", "United_States": "RDD2022_United_States.zip",
@@ -84,6 +91,26 @@ def get_kitti(local_zip: str | None) -> None:
     record("kitti", KITTI_URL, "KITTI terms: non-commercial research use (cvlibs.net/datasets/kitti)", archive)
 
 
+def get_indian() -> None:
+    """The two approved Kaggle datasets only (needs ~/.kaggle/kaggle.json). IDD is deliberately not fetched."""
+    try:
+        from kaggle.api.kaggle_api_extended import KaggleApi
+    except ImportError:
+        sys.exit("pip install kaggle  (and put your API token in ~/.kaggle/kaggle.json)")
+    api = KaggleApi()
+    api.authenticate()
+    for dirname, (slug, license_) in KAGGLE_INDIAN.items():
+        archive = RAW / "_archives" / f"{slug.split('/')[1]}.zip"
+        if archive.exists() and archive.stat().st_size > 0:
+            print(f"[skip] {archive.name} already downloaded")
+        else:
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            print(f"downloading kaggle:{slug}")
+            api.dataset_download_files(slug, path=str(archive.parent), unzip=False, quiet=False)
+        unzip(archive, RAW / dirname)
+        record(dirname, f"https://www.kaggle.com/datasets/{slug}", license_, archive)
+
+
 def figshare_urls() -> dict[str, str]:
     r = requests.get(FIGSHARE_API, timeout=30)
     r.raise_for_status()
@@ -130,7 +157,6 @@ def stats() -> None:
             print(f"KITTI {s}: {len(imgs)} images, boxes: {dict(cnt)}")
     r = RAW / "rdd2022"
     if r.exists():
-        import xml.etree.ElementTree as ET
         for cdir in sorted(p for p in r.iterdir() if p.is_dir()):
             xmls = list(cdir.rglob("*.xml"))
             imgs = list(cdir.rglob("*.jpg"))
@@ -139,6 +165,14 @@ def stats() -> None:
                 for o in ET.parse(x).getroot().iter("object"):
                     cnt[o.findtext("name")] += 1
             print(f"RDD2022 {cdir.name}: {len(imgs)} jpgs, {len(xmls)} xml annotations, boxes: {dict(cnt)}")
+    for dirname in KAGGLE_INDIAN:
+        d = RAW / dirname
+        if d.exists():
+            imgs = [p for p in d.rglob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png")]
+            xml_cnt = Counter(o.findtext("name") for x in d.rglob("*.xml")
+                              for o in ET.parse(x).getroot().iter("object"))
+            txts = [p for p in d.rglob("*.txt") if p.name != "classes.txt"]
+            print(f"{dirname}: {len(imgs)} images, {len(txts)} yolo label files, voc boxes: {dict(xml_cnt)}")
     if not k.exists() and not r.exists():
         print("Nothing in data/raw yet.")
 
@@ -149,6 +183,8 @@ if __name__ == "__main__":
     pk = sub.add_parser("kitti"); pk.add_argument("--local-zip")
     pr = sub.add_parser("rdd2022"); pr.add_argument("--countries", nargs="+", default=["India"], choices=list(RDD_FILE_NAMES))
     pr.add_argument("--local-zip")
+    sub.add_parser("indian")
     sub.add_parser("stats")
     a = ap.parse_args()
-    {"kitti": lambda: get_kitti(a.local_zip), "rdd2022": lambda: get_rdd(a.countries, a.local_zip), "stats": stats}[a.cmd]()
+    {"kitti": lambda: get_kitti(a.local_zip), "rdd2022": lambda: get_rdd(a.countries, a.local_zip), "indian": get_indian,
+     "stats": stats}[a.cmd]()

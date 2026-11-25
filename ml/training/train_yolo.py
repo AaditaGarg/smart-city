@@ -50,7 +50,7 @@ def build_train_args(tc: dict, cli: argparse.Namespace, seed: int) -> dict:
 def main(argv=None):
     cfg = load_config()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", choices=["vehicle", "road_damage"], required=True)
+    ap.add_argument("--task", choices=["vehicle", "road_damage", "indian_vehicle"], required=True)
     ap.add_argument("--model", help="override pretrained weights, e.g. yolo11s.pt")
     ap.add_argument("--epochs", type=int)
     ap.add_argument("--imgsz", type=int)
@@ -65,7 +65,7 @@ def main(argv=None):
     data = ROOT / cfg[a.task]["out_dir"] / "data.yaml"
     if not data.exists():
         sys.exit(f"{data} not found. Run the preparation step first "
-                 f"(python -m ml.preprocessing.prepare_{'kitti' if a.task == 'vehicle' else 'rdd'}).")
+                 f"(python -m ml.preprocessing.prepare_{ {'vehicle': 'kitti', 'road_damage': 'rdd'}.get(a.task, 'indian')}).")
 
     from ultralytics import YOLO
     import torch

@@ -1,0 +1,4 @@
+split,images,aug_images,background_images,boxes_car,boxes_bike,boxes_bicycle,boxes_auto,boxes_bus,boxes_truck,boxes_ambulance,boxes_person
+train,506,0,0,260,85,19,37,77,131,732,219
+val,109,0,0,55,9,4,6,17,22,168,53
+test,109,0,0,68,16,6,16,14,31,168,62

@@ -40,6 +40,74 @@ road_damage:            # RDD2022 India
     workers: 2
     hyp: {fliplr: 0.5, flipud: 0.0, mosaic: 1.0, close_mosaic: 5, degrees: 0.0}
 
+indian_vehicle:         # DataCluster Labs Indian vehicles (VOC) + Kaggle ambulance set (YOLO), see prepare_indian.py
+  raw_dirs: {voc: data/raw/indian_vehicle, ambulance: data/raw/ambulance}
+  resized_dir: data/interim/indian_vehicle_640
+  out_dir: data/processed/indian_vehicle
+  long_side: 640                # originals are 4K; shrink once at prep time to save disk and loader time
+  size_mismatch: drop           # drop | rescale | ignore  (XML size != real image size)
+  max_copies_per_photo: 1       # ambulance set is a Roboflow export with ~3 pre-augmented copies per photo
+  # Neither dataset labels people, and the ambulance photos leave ordinary traffic unlabelled. Fill those gaps with
+  # confident COCO predictions that don't overlap a human box (human labels always win). All splits, see summary.
+  pseudo_label:
+    enabled: true
+    weights: yolov8n.pt
+    conf: 0.4
+    conf_per_class: {bus: 0.65, truck: 0.5}   # at 0.4 COCO labels Indian hatchbacks, vans and banners as bus
+    max_overlap: 0.3
+    coco_map: {car: car, motorcycle: bike, bicycle: bicycle, bus: bus, truck: truck, person: person}
+  classes: [car, bike, bicycle, auto, bus, truck, ambulance, person]
+  # raw label (lower-cased, non-alphanumerics -> "_") -> kept class. Anything not listed is dropped.
+  class_map:
+    car: car
+    taxi: car
+    suv: car
+    jeep: car
+    bike: bike
+    motorbike: bike
+    motorcycle: bike
+    scooter: bike
+    scooty: bike
+    two_wheeler: bike
+    two_wheelers: bike          # DataCluster label
+    bicycle: bicycle
+    cycle: bicycle
+    auto: auto
+    autorickshaw: auto
+    auto_rickshaw: auto
+    e_rickshaw: auto
+    erickshaw: auto
+    three_wheeler: auto
+    bus: bus
+    minibus: bus
+    mini_bus: bus
+    truck: truck
+    lorry: truck
+    truck_tanker: truck
+    tanker: truck
+    pickup: truck
+    pickup_truck: truck
+    pick_up: truck
+    van: truck
+    tractor: truck
+    mini_truck: truck
+    tempo: truck                # small goods carrier
+    vehicle_truck: truck        # DataCluster label
+    concrete_mixer: truck       # a truck body; dropping it would teach the model these trucks are background
+    ambulance: ambulance
+    person: person
+    pedestrian: person
+    people: person
+  train:
+    model: yolov8n.pt           # COCO-pretrained, from the repo root
+    epochs: 30                  # run 1 (15 epochs) was still improving at the end
+    imgsz: 512
+    batch: 16
+    patience: 8
+    workers: 2
+    # freeze the first 10 layers (backbone): with ~700 images this keeps COCO features instead of overwriting them
+    hyp: {fliplr: 0.5, flipud: 0.0, mosaic: 1.0, close_mosaic: 5, degrees: 0.0, freeze: 10}
+
 congestion:             # scikit-learn model on top of vehicle-detector outputs (proxy target, see congestion.py)
   conf: 0.25
   cv_folds: 5

@@ -345,7 +345,7 @@ def update_maintenance(record_id: int, body: S.MaintenanceUpdate, db: Session = 
 def model_metrics():
     t = ROOT / "reports" / "tables"
     out: dict = {}
-    for task in ("vehicle", "road_damage"):
+    for task in ("indian_vehicle", "vehicle", "road_damage"):
         s, c = t / f"{task}_test_summary.json", t / f"{task}_test_metrics.csv"
         if s.exists() and c.exists():
             out[task] = {"summary": json.loads(s.read_text()),

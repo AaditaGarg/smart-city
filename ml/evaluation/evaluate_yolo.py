@@ -104,7 +104,7 @@ def prediction_grid(model, split_dir: Path, split: str, names: dict, out_png: Pa
 def main(argv=None):
     cfg = load_config()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", choices=["vehicle", "road_damage"], required=True)
+    ap.add_argument("--task", choices=["vehicle", "road_damage", "indian_vehicle"], required=True)
     ap.add_argument("--weights")
     ap.add_argument("--split", default="test", choices=["val", "test"])
     ap.add_argument("--imgsz", type=int)

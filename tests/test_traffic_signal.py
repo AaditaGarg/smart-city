@@ -4,10 +4,10 @@ from decision_engine.repair_priority import calculate_repair_priority, rank_segm
 
 
 def test_calculate_pcu_weights():
-    counts = {"car": 10, "truck": 2, "van": 2, "motorcycle": 4}
-    # 10*1.0 + 2*3.0 + 2*1.5 + 4*0.5 = 10 + 6 + 3 + 2 = 21.0 PCU
+    counts = {"car": 10, "truck": 2, "van": 2, "motorcycle": 4, "auto": 5}
+    # IRC:106 -> 10*1.0 + 2*2.2 + 2*1.4 + 4*0.5 + 5*1.2 = 10 + 4.4 + 2.8 + 2 + 6 = 25.2 PCU
     pcu, class_counts, has_emergency = calculate_pcu(counts)
-    assert pcu == 21.0
+    assert pcu == 25.2
     assert class_counts["car"] == 10
     assert not has_emergency
 

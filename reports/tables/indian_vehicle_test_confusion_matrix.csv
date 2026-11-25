@@ -1,0 +1,10 @@
+,true_car,true_bike,true_bicycle,true_auto,true_bus,true_truck,true_ambulance,true_person,true_background
+pred_car,62.0,1.0,0.0,3.0,1.0,3.0,0.0,0.0,1320.0
+pred_bike,0.0,12.0,1.0,1.0,0.0,0.0,0.0,0.0,1808.0
+pred_bicycle,0.0,0.0,5.0,0.0,0.0,0.0,0.0,0.0,737.0
+pred_auto,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,413.0
+pred_bus,1.0,0.0,0.0,0.0,10.0,2.0,5.0,0.0,990.0
+pred_truck,2.0,0.0,0.0,8.0,2.0,22.0,0.0,0.0,1192.0
+pred_ambulance,0.0,0.0,0.0,0.0,0.0,1.0,128.0,0.0,15899.0
+pred_person,0.0,1.0,0.0,1.0,0.0,0.0,0.0,62.0,1392.0
+pred_background,3.0,2.0,0.0,3.0,1.0,3.0,35.0,0.0,0.0

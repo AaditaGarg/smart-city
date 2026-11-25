@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from .api.deps import get_registry
+from .api.network_routes import router as network_router
 from .api.routes import router
 from .core.config import settings
 from .core.security import RateLimitMiddleware, SecurityHeadersMiddleware
@@ -44,6 +45,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(network_router)
 
 
 @app.exception_handler(ModelUnavailable)

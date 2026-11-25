@@ -1,0 +1,38 @@
+{
+  "task": "indian_vehicle",
+  "split": "test",
+  "weights": "C:\\Users\\Ridhima Goel\\Desktop\\smart-city\\models\\indian_vehicle_best.pt",
+  "weights_mb": 6.5,
+  "epochs_trained": 17,
+  "imgsz": 512,
+  "device": "cpu",
+  "images_evaluated": 109,
+  "overall": {
+    "precision": 0.49215750794985114,
+    "recall": 0.46440129849850775,
+    "f1": 0.3887077537439729,
+    "mAP50": 0.3751803970320602,
+    "mAP50-95": 0.25013044527769823
+  },
+  "latency_ms_per_image": {
+    "cpu": {
+      "n_images": 99,
+      "mean_ms": 272.6878646464644,
+      "median_ms": 298.2463000000024,
+      "p95_ms": 385.21501999999896,
+      "fps_from_mean": 3.6671965629878125
+    }
+  },
+  "ultralytics_speed_ms_per_image": {
+    "preprocess": 2.0105119266055347,
+    "inference": 96.30667247706432,
+    "loss": 0.0006018348623129946,
+    "postprocess": 5.649722018348619
+  },
+  "low_support_classes": [
+    "bike",
+    "bicycle",
+    "auto",
+    "bus"
+  ]
+}

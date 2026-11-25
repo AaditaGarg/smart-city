@@ -1,5 +1,5 @@
-"""Loads trained YOLO models lazily, with robust Computer Vision detection
-for real-world traffic photography so uploaded images are accurately analyzed.
+"""Loads YOLO models lazily. If a task has no weights on disk, detect() raises ModelUnavailable (the API turns it
+into HTTP 503) instead of returning made-up detections.
 """
 from __future__ import annotations
 
@@ -14,6 +14,11 @@ import cv2
 import numpy as np
 
 
+# COCO class name -> project vehicle class. Anything else from a COCO model (dogs, chairs, ...) is ignored.
+COCO_TO_VEHICLE = {"car": "car", "motorcycle": "bike", "bicycle": "bicycle", "bus": "bus", "truck": "truck",
+                   "person": "person"}
+
+
 class ModelUnavailable(RuntimeError):
     pass
 
@@ -23,24 +28,42 @@ class ModelRegistry:
         self.model_dir, self.device = Path(model_dir), device
         self._models, self._cong, self._lock = {}, None, threading.Lock()
 
+    def coco_weights(self) -> Path | None:
+        """COCO yolov8n.pt next to the models folder: models/, the project root, or ml_models/."""
+        for d in (self.model_dir, self.model_dir.parent, self.model_dir.parent / "ml_models"):
+            p = Path(d) / "yolov8n.pt"
+            if p.exists():
+                return p
+        return None
+
     def weights_path(self, task: str) -> Path:
+        """Vehicle task: Indian-vehicle detector if trained, else COCO yolov8n. Other tasks: <task>_best.pt."""
+        if task == "vehicle":
+            indian = self.model_dir / "indian_vehicle_best.pt"
+            if indian.exists():
+                return indian
+            return self.coco_weights() or indian
         return self.model_dir / f"{task}_best.pt"
+
+    def is_coco(self, task: str) -> bool:
+        return self.weights_path(task).name == "yolov8n.pt"
 
     def model_name(self, task: str) -> str:
         p = self.weights_path(task)
-        if p.exists():
-            return p.name
-        return f"{task}_yolov8_edge.pt"
+        return p.name if p.exists() else "unavailable"
 
     def available(self) -> dict:
         return {
-            "vehicle": True,
-            "road_damage": True,
+            "vehicle": self.weights_path("vehicle").exists(),
+            "road_damage": self.weights_path("road_damage").exists(),
             "congestion": (self.model_dir / "congestion_model.joblib").exists(),
         }
 
     def _imgsz(self, task: str) -> int:
-        meta = self.model_dir / f"{task}_train_meta.json"
+        if self.is_coco(task):
+            return 640
+        stem = self.weights_path(task).name.replace("_best.pt", "")
+        meta = self.model_dir / f"{stem}_train_meta.json"
         if meta.exists():
             try:
                 return int(json.loads(meta.read_text())["train_args"]["imgsz"])
@@ -52,179 +75,37 @@ class ModelRegistry:
         if task not in self._models:
             p = self.weights_path(task)
             if not p.exists():
-                alt = self.model_dir / "yolov8n.pt"
-                if alt.exists():
-                    p = alt
-                else:
-                    return None
+                hint = ("put models/indian_vehicle_best.pt or yolov8n.pt in the project root" if task == "vehicle"
+                        else f"train it with: python -m ml.training.train_yolo --task {task}")
+                raise ModelUnavailable(f"{task} model weights not found ({p.name}); {hint}")
             try:
                 from ultralytics import YOLO
                 from ml.training.train_yolo import pick_device
                 self.device = self.device if self.device is not None else pick_device("auto")
                 self._models[task] = YOLO(str(p))
-            except Exception:
-                return None
-        return self._models.get(task)
+            except Exception as e:
+                raise ModelUnavailable(f"could not load {task} model {p.name}: {e}") from e
+        return self._models[task]
 
     def detect(self, task: str, img_bgr: np.ndarray, conf: float = 0.25) -> Tuple[List[Dict[str, Any]], float]:
         with self._lock:
             model = self._load(task)
-            if model is not None:
-                t0 = time.perf_counter()
-                r = model.predict(img_bgr, conf=conf, imgsz=self._imgsz(task), device=self.device, verbose=False)[0]
-                ms = (time.perf_counter() - t0) * 1000
-                b = r.boxes
-                names = model.names
-                dets = [
-                    {
-                        "class_name": names[int(c)],
-                        "confidence": float(s),
-                        "x1": float(x1),
-                        "y1": float(y1),
-                        "x2": float(x2),
-                        "y2": float(y2),
-                    }
-                    for c, s, (x1, y1, x2, y2) in zip(b.cls.cpu().numpy(), b.conf.cpu().numpy(), b.xyxy.cpu().numpy())
-                ]
-                return dets, ms
-
-            # High-precision Computer Vision Detector for real-world traffic photography
-            return self._cv_edge_detect(task, img_bgr, conf)
-
-    def _cv_edge_detect(self, task: str, img_bgr: np.ndarray, conf: float) -> Tuple[List[Dict[str, Any]], float]:
-        """Real-world photography vehicle & road damage detector."""
-        t0 = time.perf_counter()
-        H, W = img_bgr.shape[:2]
-        img_area = H * W
-        dets = []
-
-        if task == "vehicle":
-            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-            # Analyze road perspective (bottom 80% of real camera frames)
-            roi_y = int(H * 0.15)
-            roi_gray = gray[roi_y:H, 0:W]
-
-            # Contrast enhancement via CLAHE
-            clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-            enhanced = clahe.apply(roi_gray)
-
-            # Dual-threshold Edge Analysis
-            edges = cv2.Canny(enhanced, 40, 130)
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-            closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
-            contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            # Detect emergency vehicle red/blue strobe presence
-            hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
-            red_mask = cv2.bitwise_or(
-                cv2.inRange(hsv, np.array([0, 120, 120]), np.array([10, 255, 255])),
-                cv2.inRange(hsv, np.array([170, 120, 120]), np.array([180, 255, 255]))
-            )
-            has_emergency_lights = cv2.countNonZero(red_mask) > (img_area * 0.005)
-
-            boxes = []
-            for cnt in contours:
-                x, y, w, h = cv2.boundingRect(cnt)
-                area = w * h
-                aspect = float(w) / max(1, h)
-
-                # Filter realistic vehicle contours
-                if (img_area * 0.008) <= area <= (img_area * 0.40) and 0.4 <= aspect <= 3.5:
-                    real_y = y + roi_y
-                    # If very wide contour (two cars side-by-side), split into two
-                    if w > (W * 0.45) and aspect > 2.2:
-                        half_w = w // 2
-                        boxes.append((x, real_y, half_w, h, area / 2))
-                        boxes.append((x + half_w, real_y, half_w, h, area / 2))
-                    else:
-                        boxes.append((x, real_y, w, h, area))
-
-            # Non-Maximum Suppression / Filter heavily overlapping boxes
-            boxes = sorted(boxes, key=lambda b: b[4], reverse=True)
-            kept_boxes = []
-            for b in boxes:
-                overlap = False
-                for kb in kept_boxes:
-                    # Compute IoU
-                    xx1 = max(b[0], kb[0])
-                    yy1 = max(b[1], kb[1])
-                    xx2 = min(b[0] + b[2], kb[0] + kb[2])
-                    yy2 = min(b[1] + b[3], kb[1] + kb[3])
-                    inter = max(0, xx2 - xx1) * max(0, yy2 - yy1)
-                    if inter / float(b[4]) > 0.45:
-                        overlap = True
-                        break
-                if not overlap:
-                    kept_boxes.append(b)
-
-            # Classify detected boxes
-            for idx, (x, y, w, h, area) in enumerate(kept_boxes[:14]):
-                aspect = float(w) / max(1, h)
-                box_red_ratio = cv2.countNonZero(red_mask[y:y+h, x:x+w]) / max(1.0, float(area))
-                is_amb = has_emergency_lights and (box_red_ratio > 0.03 or idx == 0)
-
-                if is_amb:
-                    c_name = "ambulance"
-                    conf_val = 0.94
-                elif area > (img_area * 0.10) or w > (W * 0.30):
-                    c_name = "truck" if aspect > 1.2 else "tram"
-                    conf_val = round(min(0.95, 0.75 + (area / img_area) * 0.5), 2)
-                elif area > (img_area * 0.045):
-                    c_name = "van"
-                    conf_val = round(min(0.92, 0.72 + (area / img_area) * 0.4), 2)
-                elif aspect < 0.7 and area < (img_area * 0.03):
-                    c_name = "bike"
-                    conf_val = 0.78
-                else:
-                    c_name = "car"
-                    conf_val = round(min(0.93, 0.70 + (area / img_area) * 0.4), 2)
-
-                dets.append({
-                    "class_name": c_name,
-                    "confidence": conf_val,
-                    "x1": float(x),
-                    "y1": float(y),
-                    "x2": float(min(W - 1, x + w)),
-                    "y2": float(min(H - 1, y + h)),
-                })
-
-            # Real photography fallback if lighting is exceptionally dark/monochrome
-            if len(dets) == 0:
-                dets = [
-                    {"class_name": "car", "confidence": 0.89, "x1": W * 0.18, "y1": H * 0.42, "x2": W * 0.45, "y2": H * 0.76},
-                    {"class_name": "truck", "confidence": 0.84, "x1": W * 0.52, "y1": H * 0.32, "x2": W * 0.88, "y2": H * 0.82},
-                ]
-
-        else:
-            # Potholes and cracks
-            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-            enhanced = clahe.apply(gray)
-            edges = cv2.Canny(enhanced, 35, 110)
-            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            for cnt in contours:
-                x, y, w, h = cv2.boundingRect(cnt)
-                area = w * h
-                aspect = float(w) / max(1, h)
-                if (img_area * 0.008) <= area <= (img_area * 0.18):
-                    conf_val = round(min(0.92, 0.65 + (area / img_area) * 0.8), 2)
-                    d_class = "pothole" if (0.7 <= aspect <= 1.4) else ("alligator_crack" if area > (img_area * 0.03) else "longitudinal_crack")
-                    dets.append({
-                        "class_name": d_class,
-                        "confidence": conf_val,
-                        "x1": float(x),
-                        "y1": float(y),
-                        "x2": float(x + w),
-                        "y2": float(y + h),
-                    })
-            if len(dets) == 0:
-                dets = [
-                    {"class_name": "pothole", "confidence": 0.85, "x1": W * 0.3, "y1": H * 0.45, "x2": W * 0.7, "y2": H * 0.75}
-                ]
-
-        ms = (time.perf_counter() - t0) * 1000
-        return dets[:15], round(ms, 2)
+            t0 = time.perf_counter()
+            r = model.predict(img_bgr, conf=conf, imgsz=self._imgsz(task), device=self.device, verbose=False)[0]
+            ms = (time.perf_counter() - t0) * 1000
+            b = r.boxes
+            names = model.names
+            coco = task == "vehicle" and self.is_coco(task)
+            dets = []
+            for c, s, (x1, y1, x2, y2) in zip(b.cls.cpu().numpy(), b.conf.cpu().numpy(), b.xyxy.cpu().numpy()):
+                name = names[int(c)]
+                if coco:
+                    name = COCO_TO_VEHICLE.get(name)
+                    if name is None:
+                        continue
+                dets.append({"class_name": name, "confidence": float(s),
+                             "x1": float(x1), "y1": float(y1), "x2": float(x2), "y2": float(y2)})
+            return dets, ms
 
     def congestion(self, dets: list[dict], width: int, height: int) -> dict:
         import joblib
@@ -252,7 +133,7 @@ class ModelRegistry:
             except Exception:
                 pass
 
-        pcu = sum(3.0 if d["class_name"] in ("truck", "tram") else 1.0 for d in dets)
+        pcu = sum(3.0 if d["class_name"] in ("truck", "bus", "tram") else 1.0 for d in dets)
         idx = min(100.0, max(5.0, pcu * 6.5))
         lvl = "heavy" if idx >= 65 else ("moderate" if idx >= 30 else "free")
         return {"index": round(idx, 1), "level": lvl}

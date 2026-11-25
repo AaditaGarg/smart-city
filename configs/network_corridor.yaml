@@ -1,0 +1,121 @@
+# Multi-junction networks and traffic scenarios for the signal-control simulator.
+#
+# Corridor: the 4 signalised junctions on Vikas Marg, Delhi (ITO side -> Laxmi Nagar side).
+# Junction coordinates and spacing (~410 m, ~650 m, ~970 m) come from OpenStreetMap
+# highway=traffic_signals nodes on ways named "Vikas Marg" (queried Nov 2026). OSM tags the main
+# carriageways as one-way primary roads with mostly 3 lanes each way. Side-road geometry, turn
+# ratios and volumes are typical peak-hour values, NOT field counts.
+
+networks:
+  vikas_marg:
+    name: Vikas Marg corridor, Delhi (4 real signals)
+    meta: {source: "OpenStreetMap traffic_signals on Vikas Marg", axis: "W (ITO) -> E (Laxmi Nagar)"}
+    defaults:
+      lanes: 2
+      lane_width_m: 3.5
+      speed_kmh: 40
+      boundary_length_m: 300
+      phase_plan: protected_right
+      pedestrian_phase: true
+      crossing_width_m: 14
+      ped_demand_per_h: 150
+      demand_veh_h: 350
+      turn_ratios: {L: 0.35, S: 0.35, R: 0.30}      # side roads
+    main_road: &main {lanes: 3, width_m: 10.5, speed_kmh: 50, turn_ratios: {L: 0.12, S: 0.76, R: 0.12}}
+    junctions:
+      - id: J1
+        name: Vikas Marg signal 1 (ITO side)
+        lat: 28.62995
+        lon: 77.27668
+        x: 0
+        y: 0
+        neighbours: {E: {id: J2, length_m: 410, <<: *main}}
+        boundary: {W: {<<: *main, demand_veh_h: 1500}}
+      - id: J2
+        name: Vikas Marg signal 2
+        lat: 28.63235
+        lon: 77.28023
+        x: 410
+        y: 0
+        neighbours: {W: {id: J1, length_m: 410, <<: *main}, E: {id: J3, length_m: 650, <<: *main}}
+      - id: J3
+        name: Vikas Marg signal 3
+        lat: 28.63598
+        lon: 77.28578
+        x: 1060
+        y: 0
+        neighbours: {W: {id: J2, length_m: 650, <<: *main}, E: {id: J4, length_m: 970, <<: *main}}
+      - id: J4
+        name: Vikas Marg signal 4 (Laxmi Nagar side)
+        lat: 28.64072
+        lon: 77.29434
+        x: 2030
+        y: 0
+        neighbours: {W: {id: J3, length_m: 970, <<: *main}}
+        boundary: {E: {<<: *main, demand_veh_h: 1000}}
+
+  grid_2x2:
+    name: 2x2 city grid (500 m blocks)
+    meta: {source: "synthetic grid for network-effect tests"}
+    defaults:
+      lanes: 2
+      lane_width_m: 3.5
+      speed_kmh: 40
+      boundary_length_m: 300
+      phase_plan: split4
+      pedestrian_phase: true
+      crossing_width_m: 12
+      ped_demand_per_h: 100
+      demand_veh_h: 450
+      turn_ratios: {L: 0.25, S: 0.5, R: 0.25}
+    junctions:
+      - {id: G1, name: Grid NW, x: 0, y: 0, neighbours: {E: {id: G2, length_m: 500}, S: {id: G3, length_m: 500}}}
+      - {id: G2, name: Grid NE, x: 500, y: 0, neighbours: {W: {id: G1, length_m: 500}, S: {id: G4, length_m: 500}}}
+      - {id: G3, name: Grid SW, x: 0, y: 500, neighbours: {E: {id: G4, length_m: 500}, N: {id: G1, length_m: 500}}}
+      - {id: G4, name: Grid SE, x: 500, y: 500, neighbours: {W: {id: G3, length_m: 500}, N: {id: G2, length_m: 500}}}
+
+# Vehicle mix (share of vehicles) for Delhi arterial traffic; PCU per IRC:106 in traffic_signal.py.
+vehicle_mix: {bike: 0.45, car: 0.30, auto: 0.12, bus: 0.04, truck: 0.04, bicycle: 0.05}
+
+scenarios:
+  morning_rush:
+    title: Morning rush (towards ITO-Laxmi Nagar)
+    network: vikas_marg
+    duration_s: 1800
+    profile: [[0, 0.8], [600, 1.25], [1500, 1.0], [1800, 0.9]]
+    demand: {"src_W->J1": 1700, "src_E->J4": 1100}
+  two_vs_hundred:
+    title: "2 vehicles on green vs 100 on red"
+    network: vikas_marg
+    duration_s: 1200
+    demand: {"src_W->J1": 80, "src_E->J4": 80, "src_N->J2": 900, "src_S->J2": 250}
+    initial_queues: {"src_N->J2": 100, "src_W->J1": 2}
+  over_capacity:
+    title: "500 vs 499 - more traffic than the road can carry"
+    network: vikas_marg
+    duration_s: 1500
+    demand: {"src_W->J1": 2600, "src_N->J1": 1700}
+    initial_queues: {"src_W->J1": 500, "src_N->J1": 499}
+  ambulance:
+    title: Ambulance through the corridor during rush
+    network: vikas_marg
+    duration_s: 900
+    demand: {"src_W->J1": 1600, "src_E->J4": 1000}
+    ambulance: {t: 240, enter: "src_W->J1", route: ["src_W->J1", "J1->J2", "J2->J3", "J3->J4", "J4->sink_E"]}
+  camera_failure:
+    title: Camera at signal 2 fails for 5 minutes
+    network: vikas_marg
+    duration_s: 1200
+    demand: {"src_W->J1": 1500, "src_E->J4": 1000}
+    camera_failure: {junction: J2, t_start: 300, t_end: 600}
+  balanced:
+    title: Normal balanced traffic
+    network: vikas_marg
+    duration_s: 1200
+    demand: {"src_W->J1": 900, "src_E->J4": 800}
+  grid_rush:
+    title: City grid rush hour
+    network: grid_2x2
+    duration_s: 1500
+    profile: [[0, 0.9], [500, 1.3], [1500, 1.0]]
+    demand: {"src_W->G1": 900, "src_N->G1": 700, "src_E->G4": 800}

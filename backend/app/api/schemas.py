@@ -200,3 +200,43 @@ class RepairPriorityOut(BaseModel):
     suggested_dispatch_days: int
     defect_summary: dict
     requires_alert: bool
+
+
+# ------------------------------------------------------------------ Multi-junction network control
+class NetworkSimulateIn(BaseModel):
+    scenario: str = "morning_rush"
+    controller: Literal["fixed", "webster", "max_pressure", "rl"] = "max_pressure"
+    seed: int = Field(0, ge=0, le=10_000)
+    duration_s: Optional[int] = Field(None, ge=60, le=1800)
+    corridor: Optional[bool] = Field(None, description="green corridor on/off (default: on, except fixed)")
+
+
+class NetworkCompareIn(BaseModel):
+    scenario: str = "morning_rush"
+    controllers: List[Literal["fixed", "webster", "max_pressure", "rl"]] = ["fixed", "webster", "max_pressure"]
+    seeds: int = Field(3, ge=1, le=5)
+    duration_s: Optional[int] = Field(None, ge=60, le=1800)
+
+
+class LiveApproachIn(BaseModel):
+    counts: Dict[str, int] = Field(default_factory=dict, description="class counts from YOLO, e.g. {'bike': 20}")
+    pcu: Optional[float] = Field(None, ge=0, description="queue in PCU (overrides counts)")
+    lanes: int = Field(2, ge=1, le=6)
+    down_queue_pcu: float = Field(0.0, ge=0)
+
+
+class NetworkDecideIn(BaseModel):
+    junction_id: str = "J2"
+    approaches: Dict[Literal["N", "E", "S", "W"], LiveApproachIn]
+    current_phase: int = Field(0, ge=0, le=8)
+    green_elapsed_s: float = Field(10.0, ge=0)
+
+
+class EmergencyIn(BaseModel):
+    route: List[str] = Field(default_factory=lambda: ["src_W->J1", "J1->J2", "J2->J3", "J3->J4", "J4->sink_E"])
+    from_link: Optional[str] = None
+    source: Literal["gps", "rfid", "camera", "operator"] = "gps"
+
+
+class PedestrianIn(BaseModel):
+    junction_id: str = "J2"

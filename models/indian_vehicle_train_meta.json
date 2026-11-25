@@ -1,0 +1,35 @@
+{
+  "task": "indian_vehicle",
+  "name": "indian_vehicle",
+  "pretrained": "C:/Users/Ridhima Goel/Desktop/smart-city/yolov8n.pt",
+  "device": "cpu",
+  "train_args": {
+    "epochs": 30,
+    "imgsz": 512,
+    "batch": 16,
+    "fraction": 1.0,
+    "patience": 8,
+    "workers": 2,
+    "seed": 42,
+    "plots": true,
+    "fliplr": 0.5,
+    "flipud": 0.0,
+    "mosaic": 1.0,
+    "close_mosaic": 5,
+    "degrees": 0.0,
+    "freeze": 10
+  },
+  "wall_clock_seconds": 2619.6,
+  "ultralytics": "8.4.218",
+  "torch": "2.8.0+cpu",
+  "python": "3.9.13",
+  "machine": "Windows-10-10.0.26300-SP0",
+  "final_val_metrics": {
+    "metrics/precision(B)": 0.4656072832558699,
+    "metrics/recall(B)": 0.4540516449575828,
+    "metrics/mAP50(B)": 0.3727142770705223,
+    "metrics/mAP50-95(B)": 0.2396416936701658,
+    "fitness": 0.2396416936701658
+  },
+  "best_weights": "C:\\Users\\Ridhima Goel\\Desktop\\smart-city\\models\\indian_vehicle_best.pt"
+}

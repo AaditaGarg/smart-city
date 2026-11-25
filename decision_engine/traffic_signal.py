@@ -9,17 +9,24 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Optional
 
-# Indian Roads Congress (IRC: 106-1990) & International PCU Equivalents
+# PCU equivalents for Indian urban roads, IRC:106-1990 (column for low share of each type).
 PCU_WEIGHTS: Dict[str, float] = {
     "car": 1.0,
-    "van": 1.5,
-    "truck": 3.0,
+    "van": 1.4,            # light commercial vehicle
+    "pickup": 1.4,
+    "truck": 2.2,
+    "bus": 2.2,
     "tram": 3.5,
-    "bus": 3.0,
+    "tractor": 4.0,
+    "auto": 1.2,           # auto-rickshaw
+    "autorickshaw": 1.2,
     "motorcycle": 0.5,
+    "scooter": 0.5,
     "bike": 0.5,
-    "cyclist": 0.2,
-    "pedestrian": 0.2,
+    "bicycle": 0.4,
+    "cyclist": 0.4,
+    "person": 0.0,         # pedestrians are served by the walk phase, not counted as traffic
+    "pedestrian": 0.0,
     "emergency": 999.0,     # flags immediate priority
     "ambulance": 999.0,
     "fire_truck": 999.0,
@@ -36,6 +43,32 @@ MAX_CYCLE_TIME = 150.0
 YELLOW_TIME = 3.0
 ALL_RED_TIME = 1.5
 EMERGENCY_GREEN_WINDOW = 40.0              # immediate green corridor duration
+
+
+IDLE_FUEL_L_PER_H = 0.8     # idling fuel of a car-equivalent (assumption, stated in the report)
+CO2_KG_PER_L = 2.31         # petrol
+
+
+def _webster_avg_delay(approaches: List[Dict[str, Any]], greens: List[float], cycle: float,
+                       period_h: float = 0.25) -> float:
+    """Flow-weighted average control delay per vehicle (s), HCM 2000 signalised-intersection model.
+
+    uniform     d1 = 0.5 C (1 - g/C)^2 / (1 - min(1, X) g/C)
+    incremental d2 = 900 T [ (X - 1) + sqrt((X - 1)^2 + 4 X / (c T)) ]
+    with capacity c = s g/C (PCU/h), X = v/c, analysis period T = 0.25 h. Unlike Webster's original
+    formula this stays valid when an approach is overloaded (X >= 1).
+    """
+    tot_q, tot_d = 0.0, 0.0
+    for app, g in zip(approaches, greens):
+        v = app["flow_q"]
+        lam = max(0.05, g / cycle)
+        cap = app["sat_s"] * lam
+        x = v / cap if cap > 0 else 2.0
+        d1 = 0.5 * cycle * (1 - lam) ** 2 / (1 - min(1.0, x) * lam)
+        d2 = 900 * period_h * ((x - 1) + math.sqrt((x - 1) ** 2 + 4 * x / (cap * period_h)))
+        tot_q += v
+        tot_d += (d1 + d2) * v
+    return tot_d / tot_q if tot_q > 0 else 0.0
 
 
 def calculate_pcu(detections_or_counts: List[Dict[str, Any]] | Dict[str, int]) -> tuple[float, Dict[str, int], bool]:
@@ -150,8 +183,6 @@ def webster_optimum_cycle(
                 }
                 for app in processed_approaches
             ],
-            "estimated_delay_reduction_pct": 100.0,
-            "co2_saved_kg_per_hour": 3.2,
         }
 
     # Standard Webster Optimization
@@ -178,19 +209,19 @@ def webster_optimum_cycle(
     normalized_greens = [round(max(MIN_GREEN_TIME, g * scale), 1) for g in raw_greens]
     final_cycle = round(sum(normalized_greens) + total_lost_time, 1)
 
-    # Calculate Comparative Benefits vs Static Fixed 60s Timers
-    # Average Webster delay formula: d = c(1-lambda)^2 / (2(1-lambda*x))
-    static_fixed_green = 30.0
+    # Benefits vs a fixed timer with equal greens, using the HCM 2000 control-delay model
+    # (uniform + random delay terms). These are model estimates for this junction only; the
+    # network simulator (network_sim.py) gives the measured multi-junction comparison.
     static_cycle = 60.0 * (n_phases / 2.0)
-    
-    # Delay model heuristic
-    est_static_delay = 45.0 + total_y * 30.0
-    est_dynamic_delay = 20.0 + (effective_y / 0.85) * 15.0
-    delay_reduction_pct = round(max(15.0, min(55.0, ((est_static_delay - est_dynamic_delay) / est_static_delay) * 100.0)), 1)
-    
-    # Fuel & CO2 savings: ~0.8 L/hr idling -> 2.31 kg CO2/L
-    fuel_saved_liters = round((delay_reduction_pct / 100.0) * 1.8 * n_phases, 2)
-    co2_saved_kg = round(fuel_saved_liters * 2.31, 2)
+    static_green = (static_cycle - total_lost_time) / n_phases
+    greens = normalized_greens
+    d_static = _webster_avg_delay(processed_approaches, [static_green] * n_phases, static_cycle)
+    d_dynamic = _webster_avg_delay(processed_approaches, greens, final_cycle)
+    delay_reduction_pct = round(max(0.0, (d_static - d_dynamic) / d_static * 100.0), 1) if d_static > 0 else 0.0
+    total_flow = sum(a["flow_q"] for a in processed_approaches)              # PCU/h
+    saved_veh_hours = max(0.0, d_static - d_dynamic) * total_flow / 3600.0   # per hour of operation
+    fuel_saved_liters = round(saved_veh_hours * IDLE_FUEL_L_PER_H, 2)
+    co2_saved_kg = round(fuel_saved_liters * CO2_KG_PER_L, 2)
 
     phase_timings = []
     for idx, app in enumerate(processed_approaches):

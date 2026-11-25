@@ -1,0 +1,851 @@
+{
+  "generated_s": 153.1,
+  "seeds": 5,
+  "quick": false,
+  "controllers": [
+    "fixed",
+    "webster",
+    "max_pressure",
+    "rl"
+  ],
+  "scenarios": {
+    "morning_rush": {
+      "id": "morning_rush",
+      "title": "Morning rush (towards ITO-Laxmi Nagar)",
+      "network": "vikas_marg",
+      "duration_s": 1800
+    },
+    "two_vs_hundred": {
+      "id": "two_vs_hundred",
+      "title": "2 vehicles on green vs 100 on red",
+      "network": "vikas_marg",
+      "duration_s": 1200
+    },
+    "over_capacity": {
+      "id": "over_capacity",
+      "title": "500 vs 499 - more traffic than the road can carry",
+      "network": "vikas_marg",
+      "duration_s": 1500
+    },
+    "ambulance": {
+      "id": "ambulance",
+      "title": "Ambulance through the corridor during rush",
+      "network": "vikas_marg",
+      "duration_s": 900
+    },
+    "camera_failure": {
+      "id": "camera_failure",
+      "title": "Camera at signal 2 fails for 5 minutes",
+      "network": "vikas_marg",
+      "duration_s": 1200
+    },
+    "balanced": {
+      "id": "balanced",
+      "title": "Normal balanced traffic",
+      "network": "vikas_marg",
+      "duration_s": 1200
+    },
+    "grid_rush": {
+      "id": "grid_rush",
+      "title": "City grid rush hour",
+      "network": "grid_2x2",
+      "duration_s": 1500
+    }
+  },
+  "results": {
+    "morning_rush": {
+      "fixed": {
+        "avg_wait_s": {
+          "mean": 155.3,
+          "std": 5.9
+        },
+        "p95_wait_s": {
+          "mean": 400.0,
+          "std": 22.7
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 118.4,
+          "std": 18.5
+        },
+        "max_queue_veh": {
+          "mean": 127.6,
+          "std": 26.9
+        },
+        "vehicles_exited": {
+          "mean": 2482.2,
+          "std": 21.4
+        },
+        "stopped_vehicle_hours": {
+          "mean": 126.1,
+          "std": 6.2
+        },
+        "ped_avg_wait_s": {
+          "mean": 61.3,
+          "std": 1.7
+        },
+        "worst_approach": "J1 W"
+      },
+      "webster": {
+        "avg_wait_s": {
+          "mean": 305.6,
+          "std": 22.3
+        },
+        "p95_wait_s": {
+          "mean": 964.8,
+          "std": 50.0
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 392.1,
+          "std": 23.5
+        },
+        "max_queue_veh": {
+          "mean": 504.4,
+          "std": 29.0
+        },
+        "vehicles_exited": {
+          "mean": 1905.2,
+          "std": 45.9
+        },
+        "stopped_vehicle_hours": {
+          "mean": 251.8,
+          "std": 22.0
+        },
+        "ped_avg_wait_s": {
+          "mean": 49.3,
+          "std": 1.1
+        },
+        "worst_approach": "J1 W"
+      },
+      "max_pressure": {
+        "avg_wait_s": {
+          "mean": 88.1,
+          "std": 5.1
+        },
+        "p95_wait_s": {
+          "mean": 200.0,
+          "std": 16.0
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 80.5,
+          "std": 12.6
+        },
+        "max_queue_veh": {
+          "mean": 59.4,
+          "std": 5.9
+        },
+        "vehicles_exited": {
+          "mean": 2646.2,
+          "std": 51.2
+        },
+        "stopped_vehicle_hours": {
+          "mean": 72.4,
+          "std": 4.8
+        },
+        "ped_avg_wait_s": {
+          "mean": 50.1,
+          "std": 2.8
+        },
+        "worst_approach": "J4 N"
+      },
+      "rl": {
+        "avg_wait_s": {
+          "mean": 97.8,
+          "std": 1.3
+        },
+        "p95_wait_s": {
+          "mean": 228.8,
+          "std": 14.8
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 100.0,
+          "std": 11.2
+        },
+        "max_queue_veh": {
+          "mean": 67.4,
+          "std": 14.5
+        },
+        "vehicles_exited": {
+          "mean": 2667.2,
+          "std": 70.1
+        },
+        "stopped_vehicle_hours": {
+          "mean": 81.2,
+          "std": 1.1
+        },
+        "ped_avg_wait_s": {
+          "mean": 50.3,
+          "std": 2.1
+        },
+        "worst_approach": "J3 S"
+      }
+    },
+    "two_vs_hundred": {
+      "fixed": {
+        "avg_wait_s": {
+          "mean": 92.7,
+          "std": 1.7
+        },
+        "p95_wait_s": {
+          "mean": 247.0,
+          "std": 6.1
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 90.0,
+          "std": 4.5
+        },
+        "max_queue_veh": {
+          "mean": 100,
+          "std": 0.0
+        },
+        "vehicles_exited": {
+          "mean": 1060.6,
+          "std": 47.9
+        },
+        "stopped_vehicle_hours": {
+          "mean": 31.8,
+          "std": 1.0
+        },
+        "ped_avg_wait_s": {
+          "mean": 60.3,
+          "std": 2.3
+        },
+        "worst_approach": "J2 N"
+      },
+      "webster": {
+        "avg_wait_s": {
+          "mean": 98.0,
+          "std": 20.3
+        },
+        "p95_wait_s": {
+          "mean": 298.6,
+          "std": 89.9
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 121.1,
+          "std": 56.6
+        },
+        "max_queue_veh": {
+          "mean": 100,
+          "std": 0.0
+        },
+        "vehicles_exited": {
+          "mean": 1025.6,
+          "std": 25.1
+        },
+        "stopped_vehicle_hours": {
+          "mean": 34.2,
+          "std": 8.1
+        },
+        "ped_avg_wait_s": {
+          "mean": 47.8,
+          "std": 2.4
+        },
+        "worst_approach": "J2 N"
+      },
+      "max_pressure": {
+        "avg_wait_s": {
+          "mean": 69.7,
+          "std": 7.4
+        },
+        "p95_wait_s": {
+          "mean": 222.4,
+          "std": 61.7
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 68.4,
+          "std": 19.0
+        },
+        "max_queue_veh": {
+          "mean": 100,
+          "std": 0.0
+        },
+        "vehicles_exited": {
+          "mean": 1093,
+          "std": 35.1
+        },
+        "stopped_vehicle_hours": {
+          "mean": 24.5,
+          "std": 2.6
+        },
+        "ped_avg_wait_s": {
+          "mean": 49.5,
+          "std": 1.3
+        },
+        "worst_approach": "J2 N"
+      },
+      "rl": {
+        "avg_wait_s": {
+          "mean": 144.2,
+          "std": 11.3
+        },
+        "p95_wait_s": {
+          "mean": 475.2,
+          "std": 46.0
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 265.5,
+          "std": 4.5
+        },
+        "max_queue_veh": {
+          "mean": 122.6,
+          "std": 15.2
+        },
+        "vehicles_exited": {
+          "mean": 985,
+          "std": 34.1
+        },
+        "stopped_vehicle_hours": {
+          "mean": 49.7,
+          "std": 4.5
+        },
+        "ped_avg_wait_s": {
+          "mean": 46.6,
+          "std": 2.4
+        },
+        "worst_approach": "J2 N"
+      }
+    },
+    "over_capacity": {
+      "fixed": {
+        "avg_wait_s": {
+          "mean": 511.6,
+          "std": 3.8
+        },
+        "p95_wait_s": {
+          "mean": 1284.8,
+          "std": 13.2
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 378.6,
+          "std": 6.0
+        },
+        "max_queue_veh": {
+          "mean": 892,
+          "std": 22.6
+        },
+        "vehicles_exited": {
+          "mean": 2300.6,
+          "std": 26.4
+        },
+        "stopped_vehicle_hours": {
+          "mean": 605.5,
+          "std": 5.1
+        },
+        "ped_avg_wait_s": {
+          "mean": 61.4,
+          "std": 0.8
+        },
+        "worst_approach": "J1 W"
+      },
+      "webster": {
+        "avg_wait_s": {
+          "mean": 587.4,
+          "std": 12.2
+        },
+        "p95_wait_s": {
+          "mean": 1466.0,
+          "std": 14.7
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 654.0,
+          "std": 95.1
+        },
+        "max_queue_veh": {
+          "mean": 1237.6,
+          "std": 89.3
+        },
+        "vehicles_exited": {
+          "mean": 1733.8,
+          "std": 85.2
+        },
+        "stopped_vehicle_hours": {
+          "mean": 690.0,
+          "std": 17.7
+        },
+        "ped_avg_wait_s": {
+          "mean": 49.8,
+          "std": 1.2
+        },
+        "worst_approach": "J1 W"
+      },
+      "max_pressure": {
+        "avg_wait_s": {
+          "mean": 485.1,
+          "std": 9.9
+        },
+        "p95_wait_s": {
+          "mean": 1413.0,
+          "std": 58.6
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 635.1,
+          "std": 68.2
+        },
+        "max_queue_veh": {
+          "mean": 836.2,
+          "std": 48.5
+        },
+        "vehicles_exited": {
+          "mean": 2350.2,
+          "std": 46.9
+        },
+        "stopped_vehicle_hours": {
+          "mean": 565.6,
+          "std": 10.7
+        },
+        "ped_avg_wait_s": {
+          "mean": 50.8,
+          "std": 2.6
+        },
+        "worst_approach": "J1 N"
+      },
+      "rl": {
+        "avg_wait_s": {
+          "mean": 562.7,
+          "std": 3.9
+        },
+        "p95_wait_s": {
+          "mean": 1478.0,
+          "std": 0.0
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 790.1,
+          "std": 13.4
+        },
+        "max_queue_veh": {
+          "mean": 1374.6,
+          "std": 11.6
+        },
+        "vehicles_exited": {
+          "mean": 1875.4,
+          "std": 38.9
+        },
+        "stopped_vehicle_hours": {
+          "mean": 658.4,
+          "std": 8.9
+        },
+        "ped_avg_wait_s": {
+          "mean": 47.6,
+          "std": 0.5
+        },
+        "worst_approach": "J1 W"
+      }
+    },
+    "camera_failure": {
+      "fixed": {
+        "avg_wait_s": {
+          "mean": 122.0,
+          "std": 1.8
+        },
+        "p95_wait_s": {
+          "mean": 320.0,
+          "std": 3.3
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 75.9,
+          "std": 1.8
+        },
+        "max_queue_veh": {
+          "mean": 55.2,
+          "std": 5.1
+        },
+        "vehicles_exited": {
+          "mean": 1357.8,
+          "std": 31.0
+        },
+        "stopped_vehicle_hours": {
+          "mean": 59.3,
+          "std": 1.9
+        },
+        "ped_avg_wait_s": {
+          "mean": 58.9,
+          "std": 2.1
+        },
+        "worst_approach": "J2 W"
+      },
+      "webster": {
+        "avg_wait_s": {
+          "mean": 188.7,
+          "std": 16.7
+        },
+        "p95_wait_s": {
+          "mean": 565.2,
+          "std": 58.3
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 232.4,
+          "std": 34.1
+        },
+        "max_queue_veh": {
+          "mean": 201.6,
+          "std": 52.9
+        },
+        "vehicles_exited": {
+          "mean": 1120.6,
+          "std": 39.6
+        },
+        "stopped_vehicle_hours": {
+          "mean": 92.2,
+          "std": 8.9
+        },
+        "ped_avg_wait_s": {
+          "mean": 50.3,
+          "std": 1.7
+        },
+        "worst_approach": "J4 E"
+      },
+      "max_pressure": {
+        "avg_wait_s": {
+          "mean": 73.8,
+          "std": 6.6
+        },
+        "p95_wait_s": {
+          "mean": 186.0,
+          "std": 29.9
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 59.0,
+          "std": 12.2
+        },
+        "max_queue_veh": {
+          "mean": 58.8,
+          "std": 13.8
+        },
+        "vehicles_exited": {
+          "mean": 1478,
+          "std": 14.7
+        },
+        "stopped_vehicle_hours": {
+          "mean": 36.7,
+          "std": 3.6
+        },
+        "ped_avg_wait_s": {
+          "mean": 48.7,
+          "std": 2.1
+        },
+        "worst_approach": "J1 N"
+      },
+      "rl": {
+        "avg_wait_s": {
+          "mean": 80.4,
+          "std": 2.4
+        },
+        "p95_wait_s": {
+          "mean": 191.0,
+          "std": 14.1
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 56.7,
+          "std": 4.9
+        },
+        "max_queue_veh": {
+          "mean": 46.6,
+          "std": 5.0
+        },
+        "vehicles_exited": {
+          "mean": 1483.6,
+          "std": 18.2
+        },
+        "stopped_vehicle_hours": {
+          "mean": 40.4,
+          "std": 1.6
+        },
+        "ped_avg_wait_s": {
+          "mean": 47.6,
+          "std": 1.4
+        },
+        "worst_approach": "J1 S"
+      }
+    },
+    "balanced": {
+      "fixed": {
+        "avg_wait_s": {
+          "mean": 109.1,
+          "std": 2.5
+        },
+        "p95_wait_s": {
+          "mean": 299.0,
+          "std": 7.2
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 68.6,
+          "std": 2.0
+        },
+        "max_queue_veh": {
+          "mean": 38.4,
+          "std": 1.6
+        },
+        "vehicles_exited": {
+          "mean": 1195.4,
+          "std": 22.6
+        },
+        "stopped_vehicle_hours": {
+          "mean": 44.9,
+          "std": 0.7
+        },
+        "ped_avg_wait_s": {
+          "mean": 58.3,
+          "std": 2.3
+        },
+        "worst_approach": "J2 E"
+      },
+      "webster": {
+        "avg_wait_s": {
+          "mean": 143.0,
+          "std": 22.5
+        },
+        "p95_wait_s": {
+          "mean": 426.2,
+          "std": 81.9
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 164.5,
+          "std": 42.4
+        },
+        "max_queue_veh": {
+          "mean": 78.4,
+          "std": 21.0
+        },
+        "vehicles_exited": {
+          "mean": 1084.4,
+          "std": 86.0
+        },
+        "stopped_vehicle_hours": {
+          "mean": 59.0,
+          "std": 7.8
+        },
+        "ped_avg_wait_s": {
+          "mean": 46.9,
+          "std": 2.7
+        },
+        "worst_approach": "J4 W"
+      },
+      "max_pressure": {
+        "avg_wait_s": {
+          "mean": 59.7,
+          "std": 1.3
+        },
+        "p95_wait_s": {
+          "mean": 140.0,
+          "std": 3.8
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 42.2,
+          "std": 1.5
+        },
+        "max_queue_veh": {
+          "mean": 24.6,
+          "std": 2.1
+        },
+        "vehicles_exited": {
+          "mean": 1299.2,
+          "std": 25.4
+        },
+        "stopped_vehicle_hours": {
+          "mean": 25.2,
+          "std": 0.5
+        },
+        "ped_avg_wait_s": {
+          "mean": 48.4,
+          "std": 1.5
+        },
+        "worst_approach": "J1 N"
+      },
+      "rl": {
+        "avg_wait_s": {
+          "mean": 67.6,
+          "std": 1.3
+        },
+        "p95_wait_s": {
+          "mean": 161.2,
+          "std": 4.2
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 43.0,
+          "std": 3.0
+        },
+        "max_queue_veh": {
+          "mean": 29.8,
+          "std": 3.4
+        },
+        "vehicles_exited": {
+          "mean": 1267.2,
+          "std": 25.5
+        },
+        "stopped_vehicle_hours": {
+          "mean": 28.1,
+          "std": 0.8
+        },
+        "ped_avg_wait_s": {
+          "mean": 47.9,
+          "std": 2.5
+        },
+        "worst_approach": "J3 N"
+      }
+    },
+    "grid_rush": {
+      "fixed": {
+        "avg_wait_s": {
+          "mean": 185.8,
+          "std": 10.5
+        },
+        "p95_wait_s": {
+          "mean": 409.0,
+          "std": 31.5
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 217.2,
+          "std": 29.7
+        },
+        "max_queue_veh": {
+          "mean": 117,
+          "std": 11.1
+        },
+        "vehicles_exited": {
+          "mean": 1679.2,
+          "std": 41.4
+        },
+        "stopped_vehicle_hours": {
+          "mean": 112.4,
+          "std": 6.8
+        },
+        "ped_avg_wait_s": {
+          "mean": 67.8,
+          "std": 4.5
+        },
+        "worst_approach": "G4 E"
+      },
+      "webster": {
+        "avg_wait_s": {
+          "mean": 224.5,
+          "std": 14.4
+        },
+        "p95_wait_s": {
+          "mean": 642.0,
+          "std": 61.1
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 307.7,
+          "std": 20.1
+        },
+        "max_queue_veh": {
+          "mean": 217.2,
+          "std": 24.7
+        },
+        "vehicles_exited": {
+          "mean": 1552.2,
+          "std": 15.2
+        },
+        "stopped_vehicle_hours": {
+          "mean": 138.2,
+          "std": 11.9
+        },
+        "ped_avg_wait_s": {
+          "mean": 48.7,
+          "std": 1.2
+        },
+        "worst_approach": "G1 W"
+      },
+      "max_pressure": {
+        "avg_wait_s": {
+          "mean": 172.1,
+          "std": 9.3
+        },
+        "p95_wait_s": {
+          "mean": 401.6,
+          "std": 23.4
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 167.6,
+          "std": 14.9
+        },
+        "max_queue_veh": {
+          "mean": 62.8,
+          "std": 3.8
+        },
+        "vehicles_exited": {
+          "mean": 1643,
+          "std": 40.4
+        },
+        "stopped_vehicle_hours": {
+          "mean": 103.6,
+          "std": 6.2
+        },
+        "ped_avg_wait_s": {
+          "mean": 50.3,
+          "std": 0.9
+        },
+        "worst_approach": "G1 S"
+      },
+      "rl": {
+        "avg_wait_s": {
+          "mean": 274.7,
+          "std": 14.7
+        },
+        "p95_wait_s": {
+          "mean": 713.6,
+          "std": 36.2
+        },
+        "worst_approach_avg_wait_s": {
+          "mean": 329.9,
+          "std": 15.9
+        },
+        "max_queue_veh": {
+          "mean": 251.8,
+          "std": 17.4
+        },
+        "vehicles_exited": {
+          "mean": 1321.6,
+          "std": 35.6
+        },
+        "stopped_vehicle_hours": {
+          "mean": 165.6,
+          "std": 11.4
+        },
+        "ped_avg_wait_s": {
+          "mean": 50.4,
+          "std": 1.9
+        },
+        "worst_approach": "G1 W"
+      }
+    }
+  },
+  "ambulance": {
+    "fixed_no_corridor_s": 496.8,
+    "max_pressure_no_corridor_s": 288.6,
+    "max_pressure_with_corridor_s": 223.8,
+    "route_length_m": 2630
+  },
+  "sensitivity_morning_rush_avg_wait_s": {
+    "ideal cameras": {
+      "fixed": 135.9,
+      "max_pressure": 81.6
+    },
+    "15% missed detections": {
+      "fixed": 135.9,
+      "max_pressure": 79.0
+    },
+    "turn ratios 30% wrong (learning on)": {
+      "fixed": 135.9,
+      "max_pressure": 77.3
+    },
+    "turn ratios 30% wrong (learning off)": {
+      "fixed": 135.9,
+      "max_pressure": 75.4
+    },
+    "chaotic lane discipline": {
+      "fixed": 137.9,
+      "max_pressure": 80.8
+    }
+  },
+  "two_vs_hundred_queue": {
+    "fixed": {
+      "peak_north_queue": 101,
+      "end_north_queue": 12
+    },
+    "max_pressure": {
+      "peak_north_queue": 101,
+      "end_north_queue": 30
+    }
+  }
+}
